@@ -7,9 +7,10 @@ export async function searchEvents(params: EventSearchParams): Promise<EventSear
   if (!useMockApi) {
     const search = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {
-      if (value) search.set(key, value)
+      if (value && value !== 'all') search.set(key, value)
     })
-    return request<EventSearchResult[]>(`/events/search?${search.toString()}`)
+    const suffix = search.size ? `?${search.toString()}` : ''
+    return request<EventSearchResult[]>(`/events/search${suffix}`)
   }
 
   const query = params.query.trim().toLocaleLowerCase()

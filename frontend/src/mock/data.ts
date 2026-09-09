@@ -169,18 +169,18 @@ export const mockEvents: Event[] = [
 ]
 
 export const mockEvidence: Evidence[] = [
-  { id: 'evidence-001', eventId: 'event-001', level: 'direct', source: '弹幕高频片段', content: '“新衣装”在 45 秒窗口内出现 37 次，讨论高度集中。', timestampMs: 756_000 },
-  { id: 'evidence-002', eventId: 'event-001', level: 'corroborating', source: '事件上下文', content: '主播回应“还在改袖口”，随后说明会保留原有主色。', timestampMs: 801_000 },
-  { id: 'evidence-003', eventId: 'event-002', level: 'contextual', source: '弹幕语义簇', content: '弹幕持续围绕电影配乐、镜头和年代展开讨论。', timestampMs: 2_226_000 },
-  { id: 'evidence-004', eventId: 'event-003', level: 'corroborating', source: '话题转折', content: '提及“几个人一起准备”后明显停顿，并切换到读棉花糖。', timestampMs: 6_018_000 },
-  { id: 'evidence-005', eventId: 'event-004', level: 'direct', source: '弹幕密度峰值', content: '单位时间弹幕量达到全场均值的 4.8 倍。', timestampMs: 2_005_000 },
-  { id: 'evidence-006', eventId: 'event-004', level: 'corroborating', source: '情绪反应簇', content: '“快跑”“回头”“高能”等反应词连续出现。', timestampMs: 2_041_000 },
-  { id: 'evidence-007', eventId: 'event-005', level: 'direct', source: '弹幕共识', content: '谜题完成后出现连续的“过了”“原来如此”。', timestampMs: 6_654_000 },
-  { id: 'evidence-008', eventId: 'event-006', level: 'direct', source: '点歌关键词', content: '同一曲名在两分钟内被不同用户重复提及。', timestampMs: 3_207_000 },
-  { id: 'evidence-009', eventId: 'event-007', level: 'corroborating', source: '事件上下文', content: '早期录音播放前后，弹幕集中讨论出道阶段。', timestampMs: 936_000 },
-  { id: 'evidence-010', eventId: 'event-008', level: 'direct', source: '弹幕密度峰值', content: '嘉宾进入语音后 60 秒内互动密度升至本场最高。', timestampMs: 5_632_000 },
-  { id: 'evidence-011', eventId: 'event-008', level: 'contextual', source: '人物提及', content: '两位合作主播昵称形成稳定高频词簇。', timestampMs: 5_701_000 },
-  { id: 'evidence-012', eventId: 'event-009', level: 'direct', source: '计划关键词', content: '“新歌”“活动”“联动”在该时间段集中出现。', timestampMs: 9_783_000 },
+  { id: 'evidence-001', eventId: 'event-001', level: 'E1_AUDIENCE_REACTION', source: '弹幕高频片段', content: '“新衣装”在 45 秒窗口内出现 37 次，表明观众讨论高度集中。', timestampMs: 756_000 },
+  { id: 'evidence-002', eventId: 'event-001', level: 'E2_EVENT_INFERENCE', source: '事件语义推断', content: '上下文指向新衣装仍处于细节调整阶段；具体表述尚未由字幕或人工核验确认。', timestampMs: 801_000 },
+  { id: 'evidence-003', eventId: 'event-002', level: 'E0_METADATA', source: '直播标题', content: '直播标题将本场标记为深夜杂谈；该信息不能单独证明具体发言内容。', timestampMs: 0 },
+  { id: 'evidence-004', eventId: 'event-003', level: 'E2_EVENT_INFERENCE', source: '话题转折推断', content: '弹幕语义与话题切换共同指向多人企划，但尚无更高等级来源确认。', timestampMs: 6_018_000 },
+  { id: 'evidence-005', eventId: 'event-004', level: 'E1_AUDIENCE_REACTION', source: '弹幕密度峰值', content: '单位时间弹幕量达到全场均值的 4.8 倍。', timestampMs: 2_005_000 },
+  { id: 'evidence-006', eventId: 'event-004', level: 'E1_AUDIENCE_REACTION', source: '情绪反应簇', content: '“快跑”“回头”“高能”等观众反应词连续出现。', timestampMs: 2_041_000 },
+  { id: 'evidence-007', eventId: 'event-005', level: 'E1_AUDIENCE_REACTION', source: '弹幕共识', content: '出现连续的“过了”“原来如此”等观众反馈。', timestampMs: 6_654_000 },
+  { id: 'evidence-008', eventId: 'event-006', level: 'E1_AUDIENCE_REACTION', source: '点歌关键词', content: '同一曲名在两分钟内被不同用户重复提及。', timestampMs: 3_207_000 },
+  { id: 'evidence-009', eventId: 'event-007', level: 'E2_EVENT_INFERENCE', source: '事件上下文推断', content: '早期录音播放前后，弹幕集中讨论出道阶段，据此推断事件主题。', timestampMs: 936_000 },
+  { id: 'evidence-010', eventId: 'event-008', level: 'E1_AUDIENCE_REACTION', source: '弹幕密度峰值', content: '嘉宾进入语音后 60 秒内互动密度升至本场最高。', timestampMs: 5_632_000 },
+  { id: 'evidence-011', eventId: 'event-008', level: 'E1_AUDIENCE_REACTION', source: '人物提及', content: '两位合作主播昵称形成稳定高频词簇。', timestampMs: 5_701_000 },
+  { id: 'evidence-012', eventId: 'event-009', level: 'E1_AUDIENCE_REACTION', source: '计划关键词', content: '“新歌”“活动”“联动”在该时间段集中出现。', timestampMs: 9_783_000 },
 ]
 
 export const mockHighlights: HighlightCandidate[] = [

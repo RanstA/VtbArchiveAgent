@@ -21,7 +21,13 @@ export interface Event {
   confidence: number
 }
 
-export type EvidenceLevel = 'direct' | 'corroborating' | 'contextual'
+export type EvidenceLevel =
+  | 'E0_METADATA'
+  | 'E1_AUDIENCE_REACTION'
+  | 'E2_EVENT_INFERENCE'
+  | 'E3_ASR_SUBTITLE'
+  | 'E4_VIDEO_VLM'
+  | 'E5_HUMAN_VERIFIED'
 
 export interface Evidence {
   id: string

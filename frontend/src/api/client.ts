@@ -4,8 +4,8 @@ export const useMockApi = import.meta.env.VITE_USE_MOCK_API !== 'false'
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
 
   if (!response.ok) {
