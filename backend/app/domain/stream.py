@@ -16,10 +16,3 @@ class Stream(BaseModel):
     
     archive_dir: str | None = None
     
-class StreamPart(BaseModel):
-    stream_id: str
-    part_index: int
-
-    video_path: str | None = None
-    danmaku_path: str | None = None
-    xml_path: str | None = None
