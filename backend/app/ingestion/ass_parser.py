@@ -5,7 +5,11 @@ import pysubs2
 from app.domain.danmaku import Danmaku
 
 
-def parse_ass(path: Path, stream_id: str) -> list[Danmaku]:
+def parse_ass(
+    path: Path, 
+    stream_id: str,
+    part_id: str
+) -> list[Danmaku]:
     subs = pysubs2.load(str(path))
 
     results = []
@@ -23,6 +27,7 @@ def parse_ass(path: Path, stream_id: str) -> list[Danmaku]:
                 timestamp_ms=line.start,
                 raw_text=raw_text,
                 text=text,
+                part_id=part_id
             )
         )
 
