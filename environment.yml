@@ -1,0 +1,15 @@
+name: vtuber-archive
+
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - fastapi
+      - uvicorn[standard]
+      - pydantic-settings
+      - sqlalchemy
+      - pandas
+      - pysubs2
+      - langgraph
+      - pytest
+      - httpx
