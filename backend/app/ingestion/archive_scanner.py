@@ -1,6 +1,10 @@
+import re
 from pathlib import Path
 
 from app.domain.stream_part import StreamPart
+
+
+PART_ID_PATTERN = re.compile(r"(\d+)$")
 
 
 def scan_stream_directory(
@@ -22,7 +26,8 @@ def scan_stream_directory(
     parts = []
 
     for stem, files in groups.items():
-        part_id = stem.rsplit("_", 1)[-1]
+        match = PART_ID_PATTERN.search(stem)
+        part_id = match.group(1) if match else stem
 
         parts.append(
             StreamPart(
