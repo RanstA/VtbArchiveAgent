@@ -78,7 +78,7 @@ def list_streams(
     query: str | None = None,
 ) -> list[dict]:
     query_pattern = (
-        f"%{query_strip()}%"
+        f"%{query.strip()}%"
         if query and query.strip()
         else None
     )

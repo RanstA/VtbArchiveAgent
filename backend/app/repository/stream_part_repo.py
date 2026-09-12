@@ -49,3 +49,33 @@ def delete_stream_parts(
         """,
         (stream_id,),
     )
+
+def list_stream_parts(
+    connection: sqlite3.Connection,
+    stream_id: str,
+) -> list[dict]:
+    rows = connection.execute(
+        """
+        SELECT
+            id,
+            part_id,
+            video_path,
+            danmaku_path,
+            xml_path
+        FROM stream_parts
+        WHERE stream_id = ?
+        ORDER BY id ASC
+        """,
+        (stream_id,),
+    ).fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "part_id": row[1],
+            "video_path": row[2],
+            "danmaku_path": row[3],
+            "xml_path": row[4],
+        }
+        for row in rows
+    ]
