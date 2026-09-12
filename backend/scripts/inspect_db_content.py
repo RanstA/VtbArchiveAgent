@@ -40,5 +40,33 @@ rows = connection.execute(
 
 for row in rows:
     print(row)
+    
+print("\n=== BV 数量 ===")
+
+row = connection.execute(
+    """
+    SELECT COUNT(*)
+    FROM stream_bv_ids
+    """
+).fetchone()
+
+print(row[0])
+
+print("\n=== Stream 与 BV ===")
+
+rows = connection.execute(
+    """
+    SELECT
+        streams.title,
+        stream_bv_ids.bv_id
+    FROM streams
+    LEFT JOIN stream_bv_ids
+        ON stream_bv_ids.stream_id = streams.id
+    ORDER BY stream_bv_ids.bv_id
+    """
+).fetchall()
+
+for row in rows:
+    print(row)
 
 connection.close()

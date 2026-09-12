@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -6,17 +7,39 @@ import pandas as pd
 from app.domain.stream import Stream
 
 
-def parse_publish_times(value: str) -> list[datetime]:
+def split_pipe(value) -> list[str]:
     if pd.isna(value):
         return []
 
-    parts = str(value).split("|")
-
     return [
-        pd.to_datetime(part.strip()).to_pydatetime()
-        for part in parts
+        part.strip()
+        for part in str(value).split("|")
         if part.strip()
     ]
+
+
+def parse_publish_times(value) -> list[datetime]:
+    if pd.isna(value):
+        return []
+
+    return [
+        pd.to_datetime(part).to_pydatetime()
+        for part in split_pipe(value)
+    ]
+
+
+def make_stream_id(
+    live_time: datetime,
+    title: str,
+) -> str:
+    key = f"{live_time.isoformat()}|{title.strip()}"
+
+    return str(
+        uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            key,
+        )
+    )
 
 
 def load_streams(path: Path) -> list[Stream]:
@@ -25,16 +48,29 @@ def load_streams(path: Path) -> list[Stream]:
     streams: list[Stream] = []
 
     for _, row in df.iterrows():
+        live_time = pd.to_datetime(
+            row["直播日期时间"]
+        ).to_pydatetime()
+
+        title = str(row["标题"]).strip()
+
         stream = Stream(
-            id=str(row["BV号"]),
+            id=make_stream_id(
+                live_time=live_time,
+                title=title,
+            ),
             month=str(row["月份"]),
-            live_time=pd.to_datetime(
-                row["直播日期时间"]
-            ).to_pydatetime(),
-            publish_times=parse_publish_times(row["发布日期"]),
-            bv_id=str(row["BV号"]),
-            title=str(row["标题"]),
-            video_url=str(row["视频链接"]),
+            live_time=live_time,
+            publish_times=parse_publish_times(
+                row["发布日期"]
+            ),
+            bv_ids=split_pipe(row["BV号"]),
+            title=title,
+            video_url=(
+                ""
+                if pd.isna(row["视频链接"])
+                else str(row["视频链接"])
+            ),
             status=str(row["状态"]),
         )
 

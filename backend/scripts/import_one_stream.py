@@ -27,7 +27,8 @@ stream = next(
 
 print("准备导入:")
 print(stream.title)
-print(stream.id)
+print("stream_id:", stream.id)
+print("BV:", stream.bv_ids)
 
 connection = connect_db(DB_PATH)
 init_db(connection)
