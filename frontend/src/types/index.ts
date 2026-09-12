@@ -2,7 +2,7 @@ export interface Stream {
   id: string
   title: string
   liveTime: string
-  bvId: string
+  bvIds: string[]
   hasDanmaku: boolean
   hasEvents: boolean
   durationMs?: number

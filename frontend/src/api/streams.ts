@@ -19,7 +19,9 @@ export async function getStreams(params: StreamListParams = {}): Promise<Stream[
 
   const query = params.query?.trim().toLocaleLowerCase()
   const result = mockStreams.filter((stream) => {
-    const matchesQuery = !query || stream.title.toLocaleLowerCase().includes(query) || stream.bvId.toLocaleLowerCase().includes(query)
+    const matchesQuery = !query
+      || stream.title.toLocaleLowerCase().includes(query)
+      || stream.bvIds.some((bv) => bv.toLocaleLowerCase().includes(query))
     const matchesStatus = !params.status || params.status === 'all'
       || (params.status === 'danmaku' && stream.hasDanmaku)
       || (params.status === 'events' && stream.hasEvents)

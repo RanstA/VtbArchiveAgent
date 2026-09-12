@@ -27,7 +27,7 @@ defineProps<{ streams: Stream[]; loading: boolean }>()
             </RouterLink>
           </td>
           <td class="mono muted">{{ formatDateTime(stream.liveTime) }}</td>
-          <td class="mono">{{ stream.bvId }}</td>
+          <td class="mono">{{ stream.bvIds.join(' · ') }}</td>
           <td><span class="data-status" :class="{ ready: stream.hasDanmaku }">{{ stream.hasDanmaku ? 'READY' : 'MISSING' }}</span></td>
           <td><span class="data-status" :class="{ ready: stream.hasEvents }">{{ stream.hasEvents ? 'READY' : 'PENDING' }}</span></td>
           <td class="align-right mono muted">{{ stream.durationMs ? formatTimestamp(stream.durationMs) : '—' }}</td>

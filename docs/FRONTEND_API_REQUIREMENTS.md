@@ -39,7 +39,7 @@
   "id": "stream-001",
   "title": "深夜杂谈｜聊聊新衣装准备和最近看的电影",
   "liveTime": "2026-08-28T21:05:00+08:00",
-  "bvId": "BV1AR4y1N7xQ",
+  "bvIds": ["BV1AR4y1N7xQ", "BV1w7HYziExt"],
   "hasDanmaku": true,
   "hasEvents": true,
   "durationMs": 8460000
@@ -51,10 +51,12 @@
 | `id` | `string` | 是 | Stream 稳定唯一 ID，供路由和关联使用 | Mock |
 | `title` | `string` | 是 | 直播标题 | Mock |
 | `liveTime` | `string` | 是 | 带时区 ISO 8601 开播时间 | Mock |
-| `bvId` | `string` | 是 | Bilibili BV 号 | Mock |
+| `bvIds` | `string[]` | 是 | 关联的 Bilibili BV 号列表 | Mock |
 | `hasDanmaku` | `boolean` | 是 | 是否已导入弹幕 | Mock |
 | `hasEvents` | `boolean` | 是 | 是否已有 Event 结果 | Mock |
 | `durationMs` | `number` | 否 | 直播总时长；缺失时 Timeline 会退化为最后一个 Event 的结束时间 | Mock |
+
+一场 Stream 可能关联多个 Bilibili BV 号。`bvIds` 始终使用数组表示，不使用分隔符拼接字符串。
 
 ### Event
 
@@ -159,7 +161,7 @@ GET /streams
 
 | 参数 | 类型 | 必需 | 说明 |
 | --- | --- | --- | --- |
-| `query` | `string` | 否 | 匹配直播标题或 BV 号 |
+| `query` | `string` | 否 | 匹配直播标题或任一 BV 号 |
 | `status` | `danmaku | events | pending` | 否 | `danmaku`=已有弹幕；`events`=已有 Event；`pending`=尚无 Event。选择“全部”时前端不发送该参数 |
 
 **Response `200`**
@@ -170,7 +172,7 @@ GET /streams
     "id": "stream-001",
     "title": "深夜杂谈｜聊聊新衣装准备和最近看的电影",
     "liveTime": "2026-08-28T21:05:00+08:00",
-    "bvId": "BV1AR4y1N7xQ",
+    "bvIds": ["BV1AR4y1N7xQ", "BV1w7HYziExt"],
     "hasDanmaku": true,
     "hasEvents": true,
     "durationMs": 8460000
@@ -331,7 +333,7 @@ GET /events/search
       "id": "stream-001",
       "title": "深夜杂谈｜聊聊新衣装准备和最近看的电影",
       "liveTime": "2026-08-28T21:05:00+08:00",
-      "bvId": "BV1AR4y1N7xQ",
+      "bvIds": ["BV1AR4y1N7xQ", "BV1w7HYziExt"],
       "hasDanmaku": true,
       "hasEvents": true,
       "durationMs": 8460000
@@ -440,7 +442,7 @@ POST /investigate
         "id": "stream-001",
         "title": "深夜杂谈｜聊聊新衣装准备和最近看的电影",
         "liveTime": "2026-08-28T21:05:00+08:00",
-        "bvId": "BV1AR4y1N7xQ",
+        "bvIds": ["BV1AR4y1N7xQ", "BV1w7HYziExt"],
         "hasDanmaku": true,
         "hasEvents": true,
         "durationMs": 8460000

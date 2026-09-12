@@ -60,7 +60,7 @@ watch(() => route.params.streamId, loadTimeline)
     <RouterLink class="back-link" to="/archive">← 返回直播档案</RouterLink>
     <header v-if="stream" class="page-header timeline-header">
       <div>
-        <span class="eyebrow">STREAM TIMELINE / {{ stream.bvId }}</span>
+        <span class="eyebrow">STREAM TIMELINE / {{ stream.bvIds.join(' · ') }}</span>
         <h1>{{ stream.title }}</h1>
         <div class="stream-facts">
           <span>{{ formatDateTime(stream.liveTime) }}</span>

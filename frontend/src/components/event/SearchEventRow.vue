@@ -14,7 +14,7 @@ defineProps<{ result: EventSearchResult }>()
     <div class="result-content">
       <div class="event-meta-row">
         <span class="event-type">{{ result.event.eventType }}</span>
-        <span class="mono result-stream">{{ result.stream.bvId }}</span>
+        <span class="mono result-stream">{{ result.stream.bvIds.join(' · ') }}</span>
       </div>
       <h2>{{ result.event.title }}</h2>
       <p>{{ result.matchedText }}</p>
