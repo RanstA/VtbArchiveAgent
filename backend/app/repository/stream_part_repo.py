@@ -28,3 +28,24 @@ def insert_stream_part(
     )
 
     return cursor.lastrowid
+
+
+def delete_stream_parts(
+    connection: sqlite3.Connection,
+    stream_id: str,
+) -> None:
+    """
+    删除某场 Stream 的所有 Part。
+
+    因为数据库启用了 ON DELETE CASCADE，
+    对应的 danmaku 也会一起被删除。
+
+    这样重新导入一场 Stream 时不会产生重复弹幕。
+    """
+    connection.execute(
+        """
+        DELETE FROM stream_parts
+        WHERE stream_id = ?
+        """,
+        (stream_id,),
+    )

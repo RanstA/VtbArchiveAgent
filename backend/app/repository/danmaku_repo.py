@@ -8,6 +8,9 @@ def insert_danmaku_batch(
     stream_part_id: int,
     danmaku: list[Danmaku],
 ) -> None:
+    
+    if not danmaku: return
+    
     connection.executemany(
         """
         INSERT INTO danmaku (
