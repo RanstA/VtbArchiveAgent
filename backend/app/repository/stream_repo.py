@@ -72,3 +72,84 @@ def insert_stream(
             for bv_id in stream.bv_ids
         ],
     )
+    
+def list_streams(
+    connection: sqlite3.Connection,
+    query: str | None = None,
+) -> list[dict]:
+    query_pattern = (
+        f"%{query_strip()}%"
+        if query and query.strip()
+        else None
+    )
+    
+    rows = connection.execute(
+        """
+        
+        SELECT
+            s.id,
+            s.title,
+            s.live_time,
+            s.status,
+            
+            (
+                SELECT GROUP_CONCAT(b.bv_id)
+                FROM stream_bv_ids AS b
+                WHERE b.stream_id = s.id
+            ) AS bv_ids,
+            
+            EXISTS (
+                SELECT 1
+                FROM stream_parts AS sp
+                JOIN danmaku AS d
+                    ON d.stream_part_id = sp.id
+                WHERE sp.stream_id = s.id
+                LIMIT 1
+            ) AS has_danmaku
+            
+         FROM streams AS s
+
+        WHERE (
+            ? IS NULL
+
+            OR s.title LIKE ?
+
+            OR EXISTS (
+                SELECT 1
+                FROM stream_bv_ids AS b
+                WHERE
+                    b.stream_id = s.id
+                    AND b.bv_id LIKE ?
+            )
+        )
+        
+        ORDER BY s.live_time DESC
+        
+        """,
+        (
+            query_pattern,
+            query_pattern,
+            query_pattern,
+        )
+        
+    ).fetchall()
+    
+    result = []
+    
+    for row in rows:
+        result.append(
+            {
+                "id": row[0],
+                "title": row[1],
+                "live_time": row[2],
+                "status": row[3],
+                "bv_ids": (
+                    row[4].split(",")
+                    if row[4]
+                    else []
+                ),
+                "has_danmaku": bool(row[5]),
+            }
+        )
+        
+    return result
