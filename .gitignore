@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+backend/.pytest-tmp/
 
 # Vue
 node_modules/
