@@ -3,7 +3,12 @@ from collections import Counter
 from app.domain.danmaku import Danmaku
 from app.domain.signal_window import SignalWindow
 
-    
+import re
+
+QUESTION_PATTERN = re.compile(r"^[?？]+$")
+
+MIKOTO_CHANT_PATTERN = re.compile(r"^[?:\\蜜言/]+$")
+
 BASE_STEP_MS = 10_000
 
 WINDOW_SCALES_MS = (
@@ -32,25 +37,23 @@ EXCLAMATION_MARKERS = (
     "！",
 )
 
+
 def contains_any(
     text: str,
     markers: tuple[str, ...],
 ) -> bool:
     normalized = text.lower()
 
-    return any(
-        marker in normalized
-        for marker in markers
-    )
+    return any(marker in normalized for marker in markers)
 
-def is_laugh_reaction(
-    text: str
-) -> bool:
+
+def is_laugh_reaction(text: str) -> bool:
     return contains_any(
         text,
         LAUGH_MARKERS,
     )
-    
+
+
 def is_question_reaction(
     text: str,
 ) -> bool:
@@ -58,7 +61,8 @@ def is_question_reaction(
         text,
         QUESTION_MARKERS,
     )
-    
+
+
 def is_exclamation_reaction(
     text: str,
 ) -> bool:
@@ -73,7 +77,6 @@ def build_windows_for_part(
     part_id: str,
     danmaku: list[Danmaku],
 ) -> list[SignalWindow]:
-    
     """
     对一个 StreamPart 建立：
 
@@ -85,36 +88,32 @@ def build_windows_for_part(
 
     每 10 秒移动一次。
     """
-    
-    if not danmaku: return []
-    
-    max_timestamp = max(
-        item.timestamp_ms for item in danmaku
-    )
-    
+
+    if not danmaku:
+        return []
+
+    max_timestamp = max(item.timestamp_ms for item in danmaku)
+
     windows: list[SignalWindow] = []
-    
+
     for scale_ms in WINDOW_SCALES_MS:
         start_ms = 0
-        
+
         while start_ms <= max_timestamp:
             end_ms = start_ms + scale_ms
-            
-            items = [
-                item for item in danmaku
-                if start_ms<=item.timestamp_ms<end_ms
-            ]
-            
-            texts = [
-                item.text for item in items if item.text
-            ]
-            
-            text_counter = Counter(texts)
-            
+
+            items = [item for item in danmaku if start_ms <= item.timestamp_ms < end_ms]
+
+            texts = [item.text for item in items if item.text]
+
+            signal_texts = [normalize_signal_text(text) for text in texts]
+
+            text_counter = Counter(signal_texts)
+
             danmaku_count = len(texts)
-            
+
             unique_text_count = len(text_counter)
-            
+
             if danmaku_count == 0:
                 repetition_ratio = 0.0
                 reaction_ratio = 0.0
@@ -122,49 +121,29 @@ def build_windows_for_part(
                 laugh_count = 0
                 question_count = 0
                 exclamation_count = 0
-                
+
             else:
                 repeated_count = sum(
-                    count - 1
-                    for count in text_counter.values()
-                    if count > 1
+                    count - 1 for count in text_counter.values() if count > 1
                 )
 
-                repetition_ratio = (
-                    repeated_count
-                    / danmaku_count
-                )
+                repetition_ratio = repeated_count / danmaku_count
 
-                laugh_count = sum(
-                    1
-                    for text in texts
-                    if is_laugh_reaction(text)
-                )
+                laugh_count = sum(1 for text in texts if is_laugh_reaction(text))
 
-                question_count = sum(
-                    1
-                    for text in texts
-                    if is_question_reaction(text)
-                )
+                question_count = sum(1 for text in texts if is_question_reaction(text))
 
                 exclamation_count = sum(
-                    1
-                    for text in texts
-                    if is_exclamation_reaction(text)
+                    1 for text in texts if is_exclamation_reaction(text)
                 )
 
-                reaction_count = (
-                    laugh_count
-                    + question_count
-                    + exclamation_count
-                )
-                
+                reaction_count = laugh_count + question_count + exclamation_count
+
                 reaction_ratio = min(
-                    reaction_count
-                    / danmaku_count,
+                    reaction_count / danmaku_count,
                     1.0,
                 )
-                
+
             windows.append(
                 SignalWindow(
                     stream_id=stream_id,
@@ -183,10 +162,10 @@ def build_windows_for_part(
             )
 
             start_ms += BASE_STEP_MS
-            
+
     return windows
-    
-    
+
+
 def percentile_rank(
     value: float,
     values: list[float],
@@ -203,16 +182,10 @@ def percentile_rank(
     if not values:
         return 0.0
 
-    less_or_equal = sum(
-        1
-        for item in values
-        if item <= value
-    )
+    less_or_equal = sum(1 for item in values if item <= value)
 
-    return (
-        less_or_equal
-        / len(values)
-    )
+    return less_or_equal / len(values)
+
 
 def normalize_stream_windows(
     windows: list[SignalWindow],
@@ -226,31 +199,19 @@ def normalize_stream_windows(
     60 秒同理；
     120 秒同理。
     """
-    
+
     for scale_ms in WINDOW_SCALES_MS:
-        scale_windows = [
-            window for window in windows
-            if window.scale_ms == scale_ms
-        ]
-        
+        scale_windows = [window for window in windows if window.scale_ms == scale_ms]
+
         if not scale_windows:
             continue
 
-        density_values = [
-            float(window.danmaku_count)
-            for window in scale_windows
-        ]
+        density_values = [float(window.danmaku_count) for window in scale_windows]
 
-        repetition_values = [
-            window.repetition_ratio
-            for window in scale_windows
-        ]
+        repetition_values = [window.repetition_ratio for window in scale_windows]
 
-        reaction_values = [
-            window.reaction_ratio
-            for window in scale_windows
-        ]
-        
+        reaction_values = [window.reaction_ratio for window in scale_windows]
+
         for window in scale_windows:
             window.density_score = percentile_rank(
                 float(window.danmaku_count),
@@ -268,16 +229,32 @@ def normalize_stream_windows(
             )
 
             window.score = (
-                0.5
-                * window.density_score
-                + 0.25
-                * window.repetition_score
-                + 0.25
-                * window.reaction_score
+                0.5 * window.density_score
+                + 0.25 * window.repetition_score
+                + 0.25 * window.reaction_score
             )
 
     return windows
 
+
+# 重复关键词处理
+def normalize_signal_text(text: str) -> str:
+    """
+    把形式不同但语义相同的弹幕
+    归一化成统一 token。
+
+    只用于 signal 统计，
+    不修改数据库里的原始弹幕。
+    """
+    text = text.strip()
+
+    if QUESTION_PATTERN.fullmatch(text):
+        return "<QUESTION>"
+
+    if MIKOTO_CHANT_PATTERN.fullmatch(text):
+        return "<MIKOTO_CHANT>"
+
+    return text
 
 
 def build_stream_signal_windows(
@@ -313,13 +290,9 @@ def build_stream_signal_windows(
             danmaku=danmaku,
         )
 
-        windows.extend(
-            part_windows
-        )
+        windows.extend(part_windows)
 
-    return normalize_stream_windows(
-        windows
-    )
+    return normalize_stream_windows(windows)
 
 
 def find_local_peaks(
@@ -359,9 +332,7 @@ def find_local_peaks(
         ).append(window)
 
     for group in grouped.values():
-        group.sort(
-            key=lambda item: item.start_ms
-        )
+        group.sort(key=lambda item: item.start_ms)
 
         if len(group) < 3:
             continue
@@ -377,15 +348,8 @@ def find_local_peaks(
             if current.score < min_score:
                 continue
 
-            if (
-                current.score
-                >= previous.score
-                and current.score
-                >= following.score
-            ):
-                peaks.append(
-                    current
-                )
+            if current.score >= previous.score and current.score >= following.score:
+                peaks.append(current)
 
     peaks.sort(
         key=lambda item: item.score,
@@ -393,3 +357,82 @@ def find_local_peaks(
     )
 
     return peaks
+
+
+def find_peak_ms(
+    peak_window: SignalWindow,
+    danmaku: list[Danmaku],
+) -> int:
+    """
+    在一个已经检测出的异常 SignalWindow 内，
+    找到真正最强的 10 秒时间段，
+    并返回这 10 秒的中心时间。
+
+    TODO: V0 的“最强”判断顺序：
+
+    1. danmaku_count：弹幕数量最多
+    2. reaction_count：哈哈 / 问号 / 感叹号更多
+    3. repeated_count：归一化后的重复弹幕更多
+    """
+
+    if not danmaku:
+        return (peak_window.start_ms + peak_window.end_ms) // 2
+
+    best_start_ms = peak_window.start_ms
+
+    best_key = (-1, -1, -1)
+
+    for start_ms in range(peak_window.start_ms, peak_window.end_ms, BASE_STEP_MS):
+        end_ms = min(start_ms + BASE_STEP_MS, peak_window.end_ms)
+
+        items = [item for item in danmaku if (start_ms <= item.timestamp_ms < end_ms)]
+
+        danmaku_count = len(items)
+
+        reaction_count = sum(
+            1 for item in items
+            if (
+                is_laugh_reaction(item.text)
+                or is_question_reaction(item.text)
+                or is_exclamation_reaction(item.text)
+            )
+        )
+        signal_texts = [
+            normalize_signal_text(
+                item.text
+            )
+            for item in items
+            if item.text.strip()
+        ]
+
+        text_counter = Counter(
+            signal_texts
+        )
+
+        repeated_count = sum(
+            count - 1
+            for count in text_counter.values()
+            if count > 1
+        )
+
+        # 用 tuple 做简单的多级排序。
+        current_key = (
+            danmaku_count,
+            reaction_count,
+            repeated_count,
+        )
+
+        if current_key > best_key:
+            best_key = current_key
+            best_start_ms = start_ms
+            
+    peak_ms = (
+        best_start_ms
+        + BASE_STEP_MS // 2
+    )
+
+    return min(
+        peak_ms,
+        peak_window.end_ms,
+    )
+        

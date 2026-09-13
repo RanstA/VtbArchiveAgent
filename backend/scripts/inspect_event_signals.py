@@ -6,6 +6,7 @@ from app.domain.danmaku import Danmaku
 from app.event_pipeline.signals import (
     build_stream_signal_windows,
     find_local_peaks,
+    find_peak_ms,
 )
 from app.repository.database import connect_db
 from app.repository.danmaku_repo import (
@@ -72,26 +73,19 @@ def get_top_texts(
     top_n: int = 8,
 ) -> list[tuple[str, int]]:
     """
-    找出某个 Peak 时间范围内
+    找出某个 Peak Window 时间范围内
     出现次数最多的弹幕文本。
 
-    例如：
+    当前直接按照原始干净文本统计，
+    不进行 signal normalization。
 
-        [
-            ("？？？？？", 71),
-            ("哈哈哈哈", 32),
-            ("什么", 18),
-        ]
+    所以输出仍然可以看到：
 
-    当前直接按照完整弹幕文本统计，
-    暂时不做文本归一化。
+        ？
+        ？？
+        ？？？
 
-    所以：
-
-        "？？？"
-        "？？？？"
-
-    会被认为是两个不同的文本。
+    这种真实弹幕形式。
     """
 
     texts = [
@@ -157,7 +151,6 @@ def main():
             print(
                 "没有找到匹配的 Stream"
             )
-
             return
 
         if len(streams) > 1:
@@ -194,7 +187,7 @@ def main():
         print("=" * 70)
 
         # --------------------------------
-        # 2. 读取这一场直播的所有 Part
+        # 2. 读取所有 StreamPart
         # --------------------------------
 
         parts = list_stream_parts(
@@ -202,8 +195,7 @@ def main():
             stream_id=stream_id,
         )
 
-        # 给 build_stream_signal_windows()
-        # 使用的数据结构：
+        # 给 Event Detector 使用：
         #
         # [
         #     (
@@ -218,13 +210,13 @@ def main():
             ]
         ] = []
 
-        # 同时再保存一个字典：
+        # 保存：
         #
         # part_id
         # ->
-        # 这个 Part 的全部弹幕
+        # 该 Part 的全部 Danmaku
         #
-        # 后面打印 Peak 的具体弹幕时使用。
+        # 后面找 peak_ms 和打印 Top Texts 都要用。
         danmaku_by_part_id: dict[
             str,
             list[Danmaku],
@@ -270,7 +262,7 @@ def main():
         )
 
         # --------------------------------
-        # 3. 构造 Signal Windows
+        # 3. 构造多尺度 Signal Windows
         # --------------------------------
 
         windows = build_stream_signal_windows(
@@ -284,7 +276,7 @@ def main():
         )
 
         # --------------------------------
-        # 4. 找局部 Peak
+        # 4. 找 Local Peak Windows
         # --------------------------------
 
         peaks = find_local_peaks(
@@ -326,15 +318,39 @@ def main():
             )
 
             print(
-                "时间:",
+                "Window:",
                 f"{format_time(peak.start_ms)}"
                 " - "
                 f"{format_time(peak.end_ms)}",
             )
 
             print(
-                "窗口:",
+                "Scale:",
                 f"{peak.scale_ms // 1000}s",
+            )
+
+            # --------------------------------
+            # 找这个 Peak Window 内部
+            # 最强 10 秒对应的中心时间。
+            # --------------------------------
+
+            part_danmaku = (
+                danmaku_by_part_id.get(
+                    peak.part_id,
+                    [],
+                )
+            )
+
+            peak_ms = find_peak_ms(
+                peak_window=peak,
+                danmaku=part_danmaku,
+            )
+
+            print(
+                "Peak time:",
+                format_time(
+                    peak_ms
+                ),
             )
 
             print(
@@ -368,15 +384,9 @@ def main():
             )
 
             # --------------------------------
-            # 6. Peak 内具体有哪些高频弹幕
+            # 打印这个 Peak Window 内
+            # 最常见的真实弹幕文本。
             # --------------------------------
-
-            part_danmaku = (
-                danmaku_by_part_id.get(
-                    peak.part_id,
-                    [],
-                )
-            )
 
             top_texts = get_top_texts(
                 danmaku=part_danmaku,
