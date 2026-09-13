@@ -8,7 +8,7 @@ from app.domain.signal_window import SignalWindow
 # 每隔 10 秒检查一次新的 30 秒窗口。
 BASE_STEP_MS = 10_000
 
-# V0 中 Atomic Event 固定为约 30 秒的高光片段。
+# V0 中 Highlight Candidate 固定为约 30 秒的高光片段。
 EVENT_WINDOW_MS = 30_000
 
 
@@ -332,18 +332,18 @@ def percentile_rank(
         当前值高于本场直播约 98% 的窗口。
     """
 
-    if not values:
+    if len(values) <= 1:
         return 0.0
 
-    less_or_equal = sum(
+    lower_count = sum(
         1
         for item in values
-        if item <= value
+        if item < value
     )
 
     return (
-        less_or_equal
-        / len(values)
+        lower_count
+        / (len(values) - 1)
     )
 
 
@@ -477,25 +477,29 @@ def find_local_peaks(
     如果 current：
 
     1. score >= min_score
-    2. score >= previous
-    3. score >= following
+    2. 高于左侧相邻窗口（如果存在）
+    3. 不低于右侧相邻窗口（如果存在）
 
     则认为当前 30 秒是一个
-    Atomic Event Candidate。
+    Highlight Candidate。连续同分的平台峰
+    只保留最早窗口。
     """
 
     peaks: list[SignalWindow] = []
 
     grouped: dict[
-        str,
+        tuple[str, str],
         list[SignalWindow],
     ] = {}
 
-    # 不同 Part 的局部时间不能互相比较，
-    # 所以按 part_id 分组。
+    # 不同 Stream / Part 的局部时间不能互相比较，
+    # 所以按 (stream_id, part_id) 分组。
     for window in windows:
         grouped.setdefault(
-            window.part_id,
+            (
+                window.stream_id,
+                window.part_id,
+            ),
             [],
         ).append(window)
 
@@ -506,23 +510,23 @@ def find_local_peaks(
             )
         )
 
-        if len(group) < 3:
-            continue
-
         for index in range(
-            1,
-            len(group) - 1,
+            len(group),
         ):
-            previous = (
-                group[index - 1]
-            )
-
             current = (
                 group[index]
             )
 
-            following = (
-                group[index + 1]
+            left_score = (
+                group[index - 1].score
+                if index > 0
+                else None
+            )
+
+            right_score = (
+                group[index + 1].score
+                if index + 1 < len(group)
+                else None
             )
 
             if (
@@ -532,10 +536,14 @@ def find_local_peaks(
                 continue
 
             if (
-                current.score
-                >= previous.score
-                and current.score
-                >= following.score
+                (
+                    left_score is None
+                    or current.score > left_score
+                )
+                and (
+                    right_score is None
+                    or current.score >= right_score
+                )
             ):
                 peaks.append(
                     current
@@ -561,7 +569,7 @@ def find_peak_ms(
 
     注意：
 
-    Atomic Event 本身仍然是 30 秒。
+    Highlight Candidate 本身仍然是 30 秒。
 
     peak_ms 只是告诉我们：
 

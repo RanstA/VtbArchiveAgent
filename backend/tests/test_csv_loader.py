@@ -15,8 +15,8 @@ def test_load_streams_parses_stream_and_multiple_publish_times() -> None:
     assert all(isinstance(stream, Stream) for stream in streams)
 
     stream = streams[0]
-    assert stream.id == "BV1TEST123"
-    assert stream.bv_id == "BV1TEST123"
+    assert stream.id == "ff2e375a-93f7-50dd-99b7-988faa7c7f23"
+    assert stream.bv_ids == ["BV1TEST123"]
     assert stream.title == "测试直播"
     assert stream.live_time == datetime(2025, 9, 11, 19, 0)
     assert stream.publish_times == [

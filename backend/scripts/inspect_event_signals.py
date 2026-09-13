@@ -253,7 +253,7 @@ def main():
         #
         # 一个 Local Peak
         # 就暂时视为一个
-        # Atomic Event Candidate。
+        # Highlight Candidate。
         # --------------------------------
 
         events = find_local_peaks(
@@ -262,7 +262,7 @@ def main():
         )
 
         print(
-            "Atomic Event Candidate 数量:",
+            "Highlight Candidate 数量:",
             len(events),
         )
 
@@ -275,7 +275,7 @@ def main():
 
         print(
             f"Top {args.top} "
-            "Atomic Event Candidates"
+            "Highlight Candidates"
         )
 
         print("=" * 70)
@@ -306,7 +306,7 @@ def main():
             print()
 
             print(
-                f"Atomic Event #{index}"
+                f"Highlight #{index}"
             )
 
             print(

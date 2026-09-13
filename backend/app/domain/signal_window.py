@@ -138,5 +138,5 @@ class SignalWindow(BaseModel):
     # 按一定权重组合起来。
     #
     # score 越高，
-    # 说明这个窗口越值得作为 Event Candidate 检查。
+    # 说明这个窗口越值得作为 Highlight Candidate 检查。
     score: float = 0.0
