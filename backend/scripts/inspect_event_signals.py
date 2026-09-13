@@ -27,15 +27,7 @@ def format_time(
     timestamp_ms: int,
 ) -> str:
     """
-    把毫秒时间戳转换成：
-
-        HH:MM:SS
-
-    例如：
-
-        1_060_000 ms
-        ->
-        00:17:40
+    毫秒转 HH:MM:SS。
     """
 
     total_seconds = (
@@ -73,19 +65,11 @@ def get_top_texts(
     top_n: int = 8,
 ) -> list[tuple[str, int]]:
     """
-    找出某个 Peak Window 时间范围内
-    出现次数最多的弹幕文本。
+    获取某个 30 秒候选片段中
+    最常出现的真实弹幕文本。
 
-    当前直接按照原始干净文本统计，
-    不进行 signal normalization。
-
-    所以输出仍然可以看到：
-
-        ？
-        ？？
-        ？？？
-
-    这种真实弹幕形式。
+    这里故意不用 Signal Normalization，
+    因为我们希望人工检查时看到真实弹幕。
     """
 
     texts = [
@@ -121,14 +105,14 @@ def main():
         "--top",
         type=int,
         default=20,
-        help="显示多少个 Peak",
+        help="显示多少个高光候选",
     )
 
     parser.add_argument(
         "--top-texts",
         type=int,
         default=8,
-        help="每个 Peak 显示多少条高频弹幕",
+        help="每个候选显示多少条高频弹幕",
     )
 
     args = parser.parse_args()
@@ -139,7 +123,7 @@ def main():
 
     try:
         # --------------------------------
-        # 1. 根据标题搜索 Stream
+        # 1. 搜索直播
         # --------------------------------
 
         streams = list_streams(
@@ -187,7 +171,7 @@ def main():
         print("=" * 70)
 
         # --------------------------------
-        # 2. 读取所有 StreamPart
+        # 2. 读取所有 Part + Danmaku
         # --------------------------------
 
         parts = list_stream_parts(
@@ -195,14 +179,6 @@ def main():
             stream_id=stream_id,
         )
 
-        # 给 Event Detector 使用：
-        #
-        # [
-        #     (
-        #         part_id,
-        #         [Danmaku, ...]
-        #     )
-        # ]
         stream_parts: list[
             tuple[
                 str,
@@ -210,13 +186,6 @@ def main():
             ]
         ] = []
 
-        # 保存：
-        #
-        # part_id
-        # ->
-        # 该 Part 的全部 Danmaku
-        #
-        # 后面找 peak_ms 和打印 Top Texts 都要用。
         danmaku_by_part_id: dict[
             str,
             list[Danmaku],
@@ -227,11 +196,13 @@ def main():
         for part in parts:
             part_id = part["part_id"]
 
-            danmaku = list_danmaku_by_stream_part(
-                connection=connection,
-                stream_part_id=part["id"],
-                stream_id=stream_id,
-                part_id=part_id,
+            danmaku = (
+                list_danmaku_by_stream_part(
+                    connection=connection,
+                    stream_part_id=part["id"],
+                    stream_id=stream_id,
+                    part_id=part_id,
+                )
             )
 
             total_danmaku += len(
@@ -262,88 +233,92 @@ def main():
         )
 
         # --------------------------------
-        # 3. 构造多尺度 Signal Windows
+        # 3. 生成固定 30 秒 SignalWindow
         # --------------------------------
 
-        windows = build_stream_signal_windows(
-            stream_parts=stream_parts,
-            stream_id=stream_id,
+        windows = (
+            build_stream_signal_windows(
+                stream_parts=stream_parts,
+                stream_id=stream_id,
+            )
         )
 
         print(
-            "Signal Window 数量:",
+            "30s Signal Window 数量:",
             len(windows),
         )
 
         # --------------------------------
-        # 4. 找 Local Peak Windows
+        # 4. 找局部峰
+        #
+        # 一个 Local Peak
+        # 就暂时视为一个
+        # Atomic Event Candidate。
         # --------------------------------
 
-        peaks = find_local_peaks(
+        events = find_local_peaks(
             windows=windows,
             min_score=0.85,
         )
 
         print(
-            "Peak 数量:",
-            len(peaks),
+            "Atomic Event Candidate 数量:",
+            len(events),
         )
 
         # --------------------------------
-        # 5. 打印 Peak
+        # 5. 输出结果
         # --------------------------------
 
         print()
         print("=" * 70)
 
         print(
-            f"Top {args.top} Peaks"
+            f"Top {args.top} "
+            "Atomic Event Candidates"
         )
 
         print("=" * 70)
 
-        for index, peak in enumerate(
-            peaks[: args.top],
+        for index, event in enumerate(
+            events[: args.top],
             start=1,
         ):
-            print()
-
-            print(
-                f"#{index}"
-            )
-
-            print(
-                "Part:",
-                peak.part_id,
-            )
-
-            print(
-                "Window:",
-                f"{format_time(peak.start_ms)}"
-                " - "
-                f"{format_time(peak.end_ms)}",
-            )
-
-            print(
-                "Scale:",
-                f"{peak.scale_ms // 1000}s",
-            )
-
-            # --------------------------------
-            # 找这个 Peak Window 内部
-            # 最强 10 秒对应的中心时间。
-            # --------------------------------
-
             part_danmaku = (
                 danmaku_by_part_id.get(
-                    peak.part_id,
+                    event.part_id,
                     [],
                 )
             )
 
             peak_ms = find_peak_ms(
-                peak_window=peak,
+                peak_window=event,
                 danmaku=part_danmaku,
+            )
+
+            top_texts = get_top_texts(
+                danmaku=part_danmaku,
+                start_ms=event.start_ms,
+                end_ms=event.end_ms,
+                top_n=args.top_texts,
+            )
+
+            print()
+
+            print(
+                f"Atomic Event #{index}"
+            )
+
+            print(
+                "Part:",
+                event.part_id,
+            )
+
+            print(
+                "Window:",
+                f"{format_time(event.start_ms)}"
+                " - "
+                f"{format_time(event.end_ms)}",
             )
 
             print(
@@ -355,44 +330,32 @@ def main():
 
             print(
                 "score:",
-                f"{peak.score:.3f}",
+                f"{event.score:.3f}",
             )
 
             print(
                 "density:",
-                f"{peak.density_score:.3f}",
-                f"(count={peak.danmaku_count})",
+                f"{event.density_score:.3f}",
+                f"(count={event.danmaku_count})",
             )
 
             print(
                 "repetition:",
-                f"{peak.repetition_score:.3f}",
-                f"(ratio={peak.repetition_ratio:.3f})",
+                f"{event.repetition_score:.3f}",
+                f"(ratio={event.repetition_ratio:.3f})",
             )
 
             print(
                 "reaction:",
-                f"{peak.reaction_score:.3f}",
-                f"(ratio={peak.reaction_ratio:.3f})",
+                f"{event.reaction_score:.3f}",
+                f"(ratio={event.reaction_ratio:.3f})",
             )
 
             print(
                 "reaction detail:",
-                f"laugh={peak.laugh_count}, "
-                f"question={peak.question_count}, "
-                f"exclamation={peak.exclamation_count}",
-            )
-
-            # --------------------------------
-            # 打印这个 Peak Window 内
-            # 最常见的真实弹幕文本。
-            # --------------------------------
-
-            top_texts = get_top_texts(
-                danmaku=part_danmaku,
-                start_ms=peak.start_ms,
-                end_ms=peak.end_ms,
-                top_n=args.top_texts,
+                f"laugh={event.laugh_count}, "
+                f"question={event.question_count}, "
+                f"exclamation={event.exclamation_count}",
             )
 
             print(
