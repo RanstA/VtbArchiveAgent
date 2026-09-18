@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 .pytest_cache/
 backend/.pytest-tmp/
@@ -16,14 +17,21 @@ dist/
 # Local config
 .env
 
-# Runtime / generated data
+# Runtime / generated database
 *.db
 *.sqlite
 *.sqlite3
 
+# Raw archive data
+*.mp4
+*.mkv
+*.flv
+*.ass
+*.xml
+
+# Private archive metadata
+backend/import_report.json
+
 # OS
 .DS_Store
 Thumbs.db
-
-# private data
-backend/import_report.json
