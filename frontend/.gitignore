@@ -1,4 +1,32 @@
-node_modules
-dist
-*.local
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+backend/.pytest-tmp/
+
+# Vue
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Local config
 .env
+
+# Local authentication/session data
+backend/.local/
+
+# Runtime / generated data
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# private data
+backend/import_report.json

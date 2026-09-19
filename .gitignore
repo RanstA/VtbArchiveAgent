@@ -31,7 +31,8 @@ dist/
 
 # Private archive metadata
 backend/import_report.json
-
+# Local authentication/session data
+backend/.local/
 # OS
 .DS_Store
 Thumbs.db
