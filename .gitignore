@@ -16,11 +16,22 @@ dist/
 
 # Local config
 .env
+.env.*
+!.env.example
+
+# Local authentication / session
+backend/.local/
 
 # Runtime / generated database
 *.db
 *.sqlite
 *.sqlite3
+
+# Local archive directories
+data/
+archive/
+backend/data/
+backend/archive/
 
 # Raw archive data
 *.mp4
@@ -29,10 +40,13 @@ dist/
 *.ass
 *.xml
 
-# Private archive metadata
+# Synthetic test fixtures are allowed
+!backend/tests/fixtures/*.ass
+!backend/tests/fixtures/*.xml
+
+# Private archive metadata / reports
 backend/import_report.json
-# Local authentication/session data
-backend/.local/
+
 # OS
 .DS_Store
 Thumbs.db
