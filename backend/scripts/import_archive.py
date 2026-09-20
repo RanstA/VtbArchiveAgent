@@ -1,382 +1,167 @@
 import argparse
 import json
-import os
-import re
-import unicodedata
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from app.config.settings import settings
-from app.ingestion.archive_scanner import scan_stream_directory
-from app.ingestion.ass_parser import parse_ass
+from app.domain.stream import Stream
+from app.domain.vtuber import Vtuber
 from app.ingestion.csv_loader import load_streams
-from app.repository.database import connect_db, init_db
-from app.repository.danmaku_repo import insert_danmaku_batch
-from app.repository.stream_part_repo import (
-    delete_stream_parts,
-    insert_stream_part,
+from app.ingestion.local_source import LocalSource
+from app.ingestion.persist import (
+    persist_archive_bundle,
 )
-from app.repository.stream_repo import insert_stream
+from app.repository.database import (
+    connect_db,
+    init_db,
+)
 
 
-DB_PATH = Path("vtuber_archive.db")
+DEFAULT_DB_PATH = Path(
+    "vtuber_archive.db"
+)
 
-ARCHIVE_ROOT = settings.archive_data_root
-
-CSV_PATH = ARCHIVE_ROOT / "录播完整检查.csv"
-
-REPORT_PATH = Path("import_report.json")
-
-
-WINDOWS_FORBIDDEN = re.compile(r'[<>:"/\\|?*]')
-
-
-def build_directory_index(
-    archive_root: Path,
-) -> dict[str, list[Path]]:
-    """
-    扫描整个归档目录。
-
-    key:
-        文件夹名称
-
-    value:
-        所有同名目录
-    """
-    index: dict[str, list[Path]] = {}
-
-    for root, dirs, _ in os.walk(archive_root):
-        root_path = Path(root)
-
-        for directory_name in dirs:
-            directory_path = root_path / directory_name
-
-            index.setdefault(
-                directory_name,
-                [],
-            ).append(directory_path)
-
-    return index
-
-
-def normalize_directory_name(
-    value: str,
-) -> str:
-    """
-    仅用于目录匹配，不修改数据库里的原始标题。
-
-    处理：
-    1. Unicode 兼容归一化
-    2. 删除 Windows 文件名禁止字符
-    3. 去除首尾空白
-
-    例如：
-        CSV:  嗯?
-        Folder: 嗯
-
-    或：
-        CSV:  *
-        Folder: ＊
-
-    可以归一化到同一种形式。
-    """
-    value = unicodedata.normalize(
-        "NFKC",
-        value,
-    )
-
-    value = WINDOWS_FORBIDDEN.sub(
-        "",
-        value,
-    )
-
-    return value.strip()
-
-
-def expected_month_directory(
-    stream,
-) -> str:
-    """
-    根据直播时间推导它理论上所属的月份目录。
-
-    例如：
-        2023-10-04
-        ->
-        2023年10月录播
-    """
-    return (
-        f"{stream.live_time.year}年"
-        f"{stream.live_time.month}月录播"
-    )
-
-
-def resolve_stream_directory(
-    stream,
-    directory_index: dict[str, list[Path]],
-) -> Path | None:
-    """
-    按确定性规则解析 Stream 对应的本地录播目录。
-
-    优先级：
-
-    1. 标题完全匹配，并且只有一个目录
-    2. 标题完全匹配但存在多个目录时，
-       优先直播年月对应的月份目录
-    3. 完全匹配失败时，
-       在正确月份内进行文件名安全归一化后的精确匹配
-    4. 仍然无法唯一确定时返回 None 或抛出异常
-
-    不做 fuzzy matching。
-    """
-    expected_month = expected_month_directory(
-        stream
-    )
-
-    # --------------------------------
-    # 1. 标题完全匹配
-    # --------------------------------
-
-    exact_candidates = directory_index.get(
-        stream.title,
-        [],
-    )
-
-    if len(exact_candidates) == 1:
-        return exact_candidates[0]
-
-    # --------------------------------
-    # 2. 完全匹配出现多个目录
-    #
-    # 根据直播年月选择正确月份
-    # --------------------------------
-
-    if len(exact_candidates) > 1:
-        month_candidates = [
-            path
-            for path in exact_candidates
-            if path.parent.name == expected_month
-        ]
-
-        if len(month_candidates) == 1:
-            return month_candidates[0]
-
-        if len(month_candidates) > 1:
-            raise RuntimeError(
-                "正确月份内仍存在多个同名录播目录: "
-                + " | ".join(
-                    str(path)
-                    for path in month_candidates
-                )
-            )
-
-        raise RuntimeError(
-            "找到多个同名录播目录，"
-            "但没有唯一正确月份目录: "
-            + " | ".join(
-                str(path)
-                for path in exact_candidates
-            )
-        )
-
-    # --------------------------------
-    # 3. 完全匹配不到
-    #
-    # 处理 Windows 非法字符：
-    #
-    # ? * : 等字符无法直接出现在 Windows 文件名里
-    #
-    # 只在正确月份中进行归一化后的精确匹配
-    # --------------------------------
-
-    normalized_title = normalize_directory_name(
-        stream.title
-    )
-
-    normalized_candidates: list[Path] = []
-
-    for directory_name, paths in directory_index.items():
-        normalized_directory_name = normalize_directory_name(
-            directory_name
-        )
-
-        if normalized_directory_name != normalized_title:
-            continue
-
-        for path in paths:
-            if path.parent.name == expected_month:
-                normalized_candidates.append(
-                    path
-                )
-
-    if len(normalized_candidates) == 1:
-        return normalized_candidates[0]
-
-    if len(normalized_candidates) > 1:
-        raise RuntimeError(
-            "文件名归一化后仍匹配到多个目录: "
-            + " | ".join(
-                str(path)
-                for path in normalized_candidates
-            )
-        )
-
-    # --------------------------------
-    # 4. 仍然没有找到
-    # --------------------------------
-
-    return None
+DEFAULT_REPORT_PATH = Path(
+    "import_report.json"
+)
 
 
 def import_stream(
-    connection,
-    stream,
-    directory_index: dict[str, list[Path]],
+    connection: sqlite3.Connection,
+    stream: Stream,
+    *,
+    vtuber: Vtuber,
+    archive_root: Path,
+    layout: str = "auto",
 ) -> dict:
     """
-    导入单场 Stream。
+    导入单场本地 Stream。
 
-    每场 Stream 独立事务。
+    orchestration：
+
+        Stream
+        -> LocalSource
+        -> ArchiveBundle
+        -> persist_archive_bundle
+        -> SQLite
+
+    LocalSource 负责读取本地 Archive。
+
+    persist_archive_bundle 负责
+    完整数据库事务。
     """
+
     result = {
         "stream_id": stream.id,
+        "vtuber_id": stream.vtuber_id,
         "title": stream.title,
         "status": None,
-        "directory": None,
+        "layout": None,
+        "matched_path": None,
         "parts": 0,
         "danmaku": 0,
         "error": None,
     }
 
     try:
-        # --------------------------------
-        # 1. 写 Stream 元数据 + BV
-        # --------------------------------
-
-        insert_stream(
-            connection=connection,
+        source = LocalSource(
             stream=stream,
+            archive_root=archive_root,
+            vtuber=vtuber,
+            layout=layout,
         )
 
-        # --------------------------------
-        # 2. 解析本地目录
-        # --------------------------------
+        bundle = source.load()
 
-        stream_directory = resolve_stream_directory(
-            stream=stream,
-            directory_index=directory_index,
-        )
-
-        # 找不到本地录播：
-        # 仍然保留 CSV 元数据
-        if stream_directory is None:
-            connection.commit()
-
-            result["status"] = "metadata_only"
-
-            return result
-
-        result["directory"] = str(
-            stream_directory
-        )
-
-        # --------------------------------
-        # 3. 幂等重导
-        #
-        # 删除旧 Part。
-        #
-        # danmaku 会通过 ON DELETE CASCADE
-        # 自动删除。
-        #
-        # 如果后面失败，
-        # rollback 会撤销这里的删除。
-        # --------------------------------
-
-        delete_stream_parts(
+        persist_archive_bundle(
             connection=connection,
-            stream_id=stream.id,
+            bundle=bundle,
         )
 
-        # --------------------------------
-        # 4. 扫描 Part
-        # --------------------------------
-
-        parts = scan_stream_directory(
-            directory=stream_directory,
-            stream_id=stream.id,
+        result["layout"] = (
+            bundle.source_metadata.get(
+                "layout"
+            )
         )
 
-        total_danmaku = 0
-
-        # --------------------------------
-        # 5. 导入 Part + Danmaku
-        # --------------------------------
-
-        for part in parts:
-            stream_part_id = insert_stream_part(
-                connection=connection,
-                part=part,
+        result["matched_path"] = (
+            bundle.source_metadata.get(
+                "matched_path"
             )
+        )
 
-            if part.danmaku_path is None:
-                continue
+        result["parts"] = len(
+            bundle.parts
+        )
 
-            danmaku = parse_ass(
-                path=Path(part.danmaku_path),
-                stream_id=stream.id,
-                part_id=part.part_id,
+        result["danmaku"] = len(
+            bundle.danmaku
+        )
+
+        if bundle.parts:
+            result["status"] = (
+                "imported"
             )
-
-            insert_danmaku_batch(
-                connection=connection,
-                stream_part_id=stream_part_id,
-                danmaku=danmaku,
+        else:
+            result["status"] = (
+                "metadata_only"
             )
-
-            total_danmaku += len(danmaku)
-
-        # --------------------------------
-        # 6. 单 Stream 全部成功才提交
-        # --------------------------------
-
-        connection.commit()
-
-        result["status"] = "imported"
-        result["parts"] = len(parts)
-        result["danmaku"] = total_danmaku
 
         return result
 
     except Exception as exc:
-        # 当前 Stream 失败，
-        # 不影响其他 Stream。
-        connection.rollback()
+        # persist_archive_bundle 本身已经保证
+        # 事务失败时 rollback。
+        #
+        # 这里额外清理可能残留的事务状态，
+        # 保证后面的 Stream 可以继续导入。
+        if connection.in_transaction:
+            connection.rollback()
 
         result["status"] = "failed"
-        result["error"] = str(exc)
+
+        result["error"] = str(
+            exc
+        )
 
         return result
 
 
 def write_report(
     results: list[dict],
+    report_path: Path,
 ) -> None:
     report = {
-        "generated_at": datetime.now().isoformat(),
-        "total": len(results),
+        "generated_at": (
+            datetime.now()
+            .isoformat()
+        ),
+        "total": len(
+            results
+        ),
         "imported": sum(
             1
             for item in results
-            if item["status"] == "imported"
+            if (
+                item["status"]
+                == "imported"
+            )
         ),
         "metadata_only": sum(
             1
             for item in results
-            if item["status"] == "metadata_only"
+            if (
+                item["status"]
+                == "metadata_only"
+            )
         ),
         "failed": sum(
             1
             for item in results
-            if item["status"] == "failed"
+            if (
+                item["status"]
+                == "failed"
+            )
         ),
         "total_parts": sum(
             item["parts"]
@@ -389,7 +174,12 @@ def write_report(
         "streams": results,
     }
 
-    REPORT_PATH.write_text(
+    report_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    report_path.write_text(
         json.dumps(
             report,
             ensure_ascii=False,
@@ -401,23 +191,33 @@ def write_report(
 
 def print_summary(
     results: list[dict],
+    report_path: Path,
 ) -> None:
     imported = [
         item
         for item in results
-        if item["status"] == "imported"
+        if (
+            item["status"]
+            == "imported"
+        )
     ]
 
     metadata_only = [
         item
         for item in results
-        if item["status"] == "metadata_only"
+        if (
+            item["status"]
+            == "metadata_only"
+        )
     ]
 
     failed = [
         item
         for item in results
-        if item["status"] == "failed"
+        if (
+            item["status"]
+            == "failed"
+        )
     ]
 
     print()
@@ -425,10 +225,25 @@ def print_summary(
     print("导入完成")
     print("=" * 60)
 
-    print("Stream 总数:", len(results))
-    print("完整导入:", len(imported))
-    print("仅元数据:", len(metadata_only))
-    print("失败:", len(failed))
+    print(
+        "Stream 总数:",
+        len(results),
+    )
+
+    print(
+        "完整导入:",
+        len(imported),
+    )
+
+    print(
+        "仅元数据:",
+        len(metadata_only),
+    )
+
+    print(
+        "失败:",
+        len(failed),
+    )
 
     print(
         "Part 总数:",
@@ -448,70 +263,245 @@ def print_summary(
 
     if metadata_only:
         print()
-        print("=== 仅元数据项 ===")
+        print(
+            "=== 仅元数据项 ==="
+        )
 
         for item in metadata_only:
             print()
-            print(item["title"])
+            print(
+                item["title"]
+            )
 
     if failed:
         print()
-        print("=== 失败项 ===")
+        print(
+            "=== 失败项 ==="
+        )
 
         for item in failed:
             print()
-            print(item["title"])
+            print(
+                item["title"]
+            )
+
             print(
                 "原因:",
                 item["error"],
             )
 
     print()
+
     print(
         "详细报告:",
-        REPORT_PATH.resolve(),
+        report_path.resolve(),
     )
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Import a local VTuber archive "
+            "into SQLite."
+        )
+    )
+
+    parser.add_argument(
+        "--archive-root",
+        type=Path,
+        required=True,
+        help=(
+            "本地主播 Archive 根目录"
+        ),
+    )
+
+    parser.add_argument(
+        "--csv",
+        type=Path,
+        default=None,
+        help=(
+            "Stream 元数据 CSV。"
+            "默认使用 "
+            "<archive-root>/录播完整检查.csv"
+        ),
+    )
+
+    parser.add_argument(
+        "--vtuber-id",
+        required=True,
+        help=(
+            "系统内部稳定 VTuber ID，"
+            "例如 mikoto / aza"
+        ),
+    )
+
+    parser.add_argument(
+        "--vtuber-name",
+        required=True,
+        help=(
+            "VTuber 当前显示名称"
+        ),
+    )
+
+    parser.add_argument(
+        "--layout",
+        choices=[
+            "auto",
+            "nested",
+            "flat",
+        ],
+        default="auto",
+        help=(
+            "本地 Archive 布局"
+        ),
+    )
+
+    parser.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
+        help=(
+            "目标 SQLite 数据库"
+        ),
+    )
+
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=DEFAULT_REPORT_PATH,
+        help=(
+            "导入报告输出路径"
+        ),
+    )
 
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="仅导入前 N 条，用于测试",
+        help=(
+            "仅处理前 N 条，"
+            "用于 smoke test"
+        ),
     )
 
     args = parser.parse_args()
 
+    if (
+        args.limit is not None
+        and args.limit < 1
+    ):
+        parser.error(
+            "--limit must be >= 1"
+        )
+
+    archive_root = (
+        args.archive_root
+        .expanduser()
+        .resolve()
+    )
+
+    csv_path = (
+        args.csv.expanduser().resolve()
+        if args.csv is not None
+        else (
+            archive_root
+            / "录播完整检查.csv"
+        )
+    )
+
+    db_path = (
+        args.db
+        .expanduser()
+        .resolve()
+    )
+
+    report_path = (
+        args.report
+        .expanduser()
+        .resolve()
+    )
+
+    if not archive_root.exists():
+        raise FileNotFoundError(
+            "Archive root does not exist: "
+            f"{archive_root}"
+        )
+
+    if not archive_root.is_dir():
+        raise NotADirectoryError(
+            "Archive root is not a directory: "
+            f"{archive_root}"
+        )
+
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"CSV does not exist: "
+            f"{csv_path}"
+        )
+
+    if not csv_path.is_file():
+        raise FileNotFoundError(
+            f"CSV is not a file: "
+            f"{csv_path}"
+        )
+
+    vtuber_id = (
+        args.vtuber_id.strip()
+    )
+
+    vtuber_name = (
+        args.vtuber_name.strip()
+    )
+
+    if not vtuber_id:
+        parser.error(
+            "--vtuber-id cannot be empty"
+        )
+
+    if not vtuber_name:
+        parser.error(
+            "--vtuber-name cannot be empty"
+        )
+
+    vtuber = Vtuber(
+        id=vtuber_id,
+        display_name=vtuber_name,
+    )
+
+    print()
+    print("VTuber:")
+    print(
+        f"{vtuber.display_name} "
+        f"({vtuber.id})"
+    )
+
+    print()
     print("Archive Root:")
-    print(ARCHIVE_ROOT)
+    print(
+        archive_root
+    )
 
     print()
     print("CSV:")
-    print(CSV_PATH)
+    print(
+        csv_path
+    )
 
-    # --------------------------------
-    # 基础路径检查
-    # --------------------------------
+    print()
+    print("Layout:")
+    print(
+        args.layout
+    )
 
-    if not ARCHIVE_ROOT.exists():
-        raise FileNotFoundError(
-            f"归档根目录不存在: {ARCHIVE_ROOT}"
-        )
-
-    if not CSV_PATH.exists():
-        raise FileNotFoundError(
-            f"CSV 不存在: {CSV_PATH}"
-        )
-
-    # --------------------------------
-    # 1. 加载 CSV
-    # --------------------------------
+    print()
+    print("Database:")
+    print(
+        db_path
+    )
 
     streams = load_streams(
-        CSV_PATH
+        csv_path,
+        vtuber_id=vtuber.id,
     )
 
     if args.limit is not None:
@@ -521,46 +511,27 @@ def main():
 
     print()
     print(
-        f"准备处理 {len(streams)} 个 Stream"
+        "准备处理 "
+        f"{len(streams)} "
+        "个 Stream"
     )
-
-    # --------------------------------
-    # 2. 建立目录索引
-    # --------------------------------
-
-    print()
-    print("正在建立录播目录索引...")
-
-    directory_index = build_directory_index(
-        ARCHIVE_ROOT
-    )
-
-    print(
-        f"目录索引完成，共 "
-        f"{len(directory_index)} "
-        f"个不同目录名"
-    )
-
-    # --------------------------------
-    # 3. 初始化数据库
-    # --------------------------------
 
     connection = connect_db(
-        DB_PATH
+        db_path
     )
 
-    init_db(
-        connection
-    )
-
-    results: list[dict] = []
+    results: list[
+        dict
+    ] = []
 
     try:
-        # --------------------------------
-        # 4. 一个 Stream 一个事务
-        # --------------------------------
+        init_db(
+            connection
+        )
 
-        total = len(streams)
+        total = len(
+            streams
+        )
 
         for index, stream in enumerate(
             streams,
@@ -576,24 +547,39 @@ def main():
             result = import_stream(
                 connection=connection,
                 stream=stream,
-                directory_index=directory_index,
+                vtuber=vtuber,
+                archive_root=(
+                    archive_root
+                ),
+                layout=args.layout,
             )
 
             results.append(
                 result
             )
 
-            if result["status"] == "imported":
+            if (
+                result["status"]
+                == "imported"
+            ):
                 print(
                     "  imported | "
-                    f"parts={result['parts']} | "
-                    f"danmaku={result['danmaku']}"
+                    f"layout="
+                    f"{result['layout']} | "
+                    f"parts="
+                    f"{result['parts']} | "
+                    f"danmaku="
+                    f"{result['danmaku']}"
                 )
 
-            elif result["status"] == "metadata_only":
+            elif (
+                result["status"]
+                == "metadata_only"
+            ):
                 print(
                     "  metadata_only | "
-                    "未解析到唯一录播目录"
+                    f"layout="
+                    f"{result['layout']}"
                 )
 
             else:
@@ -605,16 +591,14 @@ def main():
     finally:
         connection.close()
 
-    # --------------------------------
-    # 5. 写报告
-    # --------------------------------
-
     write_report(
-        results
+        results=results,
+        report_path=report_path,
     )
 
     print_summary(
-        results
+        results=results,
+        report_path=report_path,
     )
 
 
