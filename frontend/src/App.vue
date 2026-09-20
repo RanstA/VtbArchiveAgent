@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRoute } from 'vue-router'
 import { getBackendHealth } from '@/api/system'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { useThemeStore } from '@/stores/theme'
 
 const backendStatus = ref<'checking' | 'online' | 'offline'>('checking')
+const route = useRoute()
 const themeStore = useThemeStore()
 const { isDark } = storeToRefs(themeStore)
+const isWorkspace = computed(() => route.meta.workspace === true)
 
 onMounted(async () => {
   try {
@@ -20,7 +23,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div v-if="isWorkspace" class="app-shell">
     <AppSidebar :backend-status="backendStatus" />
     <div class="workspace-shell">
       <div class="workspace-topbar">
@@ -43,4 +46,5 @@ onMounted(async () => {
       <RouterView />
     </div>
   </div>
+  <RouterView v-else />
 </template>
