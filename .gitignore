@@ -50,3 +50,6 @@ backend/import_report.json
 # OS
 .DS_Store
 Thumbs.db
+
+
+.pytest-tmp/

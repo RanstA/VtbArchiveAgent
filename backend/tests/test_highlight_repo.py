@@ -38,8 +38,23 @@ def insert_test_stream(
 ) -> None:
     connection.execute(
         """
+        INSERT INTO vtubers (
+            id,
+            display_name
+        )
+        VALUES (?, ?)
+        """,
+        (
+            "vtuber-test",
+            "测试主播",
+        ),
+    )
+
+    connection.execute(
+        """
         INSERT INTO streams (
             id,
+            vtuber_id,
             month,
             live_time,
             publish_times,
@@ -48,11 +63,12 @@ def insert_test_stream(
             status
         )
         VALUES (
-            ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
             stream_id,
+            "vtuber-test",
             "2023-09",
             "2023-09-08T18:00:00+08:00",
             "[]",
@@ -334,16 +350,6 @@ def test_replace_is_atomic_when_insert_fails():
             ],
         )
 
-        # p999 并不存在。
-        #
-        # 因为 highlights 有：
-        #
-        # FOREIGN KEY (
-        #     stream_id,
-        #     part_id
-        # )
-        #
-        # 所以 INSERT 会失败。
         invalid = make_highlight(
             part_id="p999",
             start_ms=200_000,
@@ -362,10 +368,6 @@ def test_replace_is_atomic_when_insert_fails():
                 ],
             )
 
-        # DELETE + INSERT 是同一个事务。
-        #
-        # 新数据写失败后，
-        # 原来的 Highlight 应该仍然存在。
         stored = list_highlights_by_stream(
             connection=connection,
             stream_id="stream-1",

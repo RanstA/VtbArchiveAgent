@@ -1,7 +1,9 @@
 import json
 import sqlite3
 
-from app.domain.stream import Stream
+from app.domain.stream import (
+    Stream,
+)
 
 
 def insert_stream(
@@ -12,6 +14,7 @@ def insert_stream(
         """
         INSERT INTO streams (
             id,
+            vtuber_id,
             month,
             live_time,
             publish_times,
@@ -19,10 +22,11 @@ def insert_stream(
             video_url,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 
         ON CONFLICT(id)
         DO UPDATE SET
+            vtuber_id = excluded.vtuber_id,
             month = excluded.month,
             live_time = excluded.live_time,
             publish_times = excluded.publish_times,
@@ -32,12 +36,14 @@ def insert_stream(
         """,
         (
             stream.id,
+            stream.vtuber_id,
             stream.month,
             stream.live_time.isoformat(),
             json.dumps(
                 [
                     time.isoformat()
-                    for time in stream.publish_times
+                    for time
+                    in stream.publish_times
                 ],
                 ensure_ascii=False,
             ),
@@ -47,7 +53,7 @@ def insert_stream(
         ),
     )
 
-    # 当前 Stream 的 BV 关系重新同步
+    # 当前 Stream 的 BV 关系重新同步。
     connection.execute(
         """
         DELETE FROM stream_bv_ids
@@ -69,47 +75,75 @@ def insert_stream(
                 stream.id,
                 bv_id,
             )
-            for bv_id in stream.bv_ids
+            for bv_id
+            in stream.bv_ids
         ],
     )
-    
+
+
 def list_streams(
     connection: sqlite3.Connection,
     query: str | None = None,
+    vtuber_id: str | None = None,
 ) -> list[dict]:
     query_pattern = (
         f"%{query.strip()}%"
-        if query and query.strip()
+        if query
+        and query.strip()
         else None
     )
-    
+
+    vtuber_filter = (
+        vtuber_id.strip()
+        if vtuber_id
+        and vtuber_id.strip()
+        else None
+    )
+
     rows = connection.execute(
         """
-        
         SELECT
             s.id,
+            s.vtuber_id,
+            v.display_name,
             s.title,
             s.live_time,
             s.status,
-            
+
             (
-                SELECT GROUP_CONCAT(b.bv_id)
+                SELECT GROUP_CONCAT(
+                    b.bv_id
+                )
                 FROM stream_bv_ids AS b
-                WHERE b.stream_id = s.id
+                WHERE
+                    b.stream_id = s.id
             ) AS bv_ids,
-            
+
             EXISTS (
                 SELECT 1
                 FROM stream_parts AS sp
+
                 JOIN danmaku AS d
-                    ON d.stream_part_id = sp.id
-                WHERE sp.stream_id = s.id
+                    ON d.stream_part_id
+                    = sp.id
+
+                WHERE
+                    sp.stream_id = s.id
+
                 LIMIT 1
             ) AS has_danmaku
-            
-         FROM streams AS s
+
+        FROM streams AS s
+
+        JOIN vtubers AS v
+            ON v.id = s.vtuber_id
 
         WHERE (
+            ? IS NULL
+            OR s.vtuber_id = ?
+        )
+
+        AND (
             ? IS NULL
 
             OR s.title LIKE ?
@@ -122,34 +156,39 @@ def list_streams(
                     AND b.bv_id LIKE ?
             )
         )
-        
-        ORDER BY s.live_time DESC
-        
+
+        ORDER BY
+            s.live_time DESC
         """,
         (
+            vtuber_filter,
+            vtuber_filter,
             query_pattern,
             query_pattern,
             query_pattern,
-        )
-        
+        ),
     ).fetchall()
-    
+
     result = []
-    
+
     for row in rows:
         result.append(
             {
                 "id": row[0],
-                "title": row[1],
-                "live_time": row[2],
-                "status": row[3],
+                "vtuber_id": row[1],
+                "vtuber_name": row[2],
+                "title": row[3],
+                "live_time": row[4],
+                "status": row[5],
                 "bv_ids": (
-                    row[4].split(",")
-                    if row[4]
+                    row[6].split(",")
+                    if row[6]
                     else []
                 ),
-                "has_danmaku": bool(row[5]),
+                "has_danmaku": bool(
+                    row[7]
+                ),
             }
         )
-        
+
     return result

@@ -16,19 +16,132 @@ def connect_db(
     return connection
 
 
+def _table_exists(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> bool:
+    row = connection.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE
+            type = 'table'
+            AND name = ?
+        LIMIT 1
+        """,
+        (table_name,),
+    ).fetchone()
+
+    return row is not None
+
+
+def _table_columns(
+    connection: sqlite3.Connection,
+    table_name: str,
+) -> set[str]:
+    rows = connection.execute(
+        f"PRAGMA table_info({table_name})"
+    ).fetchall()
+
+    return {
+        row[1]
+        for row in rows
+    }
+
+
+def _assert_schema_compatible(
+    connection: sqlite3.Connection,
+) -> None:
+    """
+    当前项目仍处于开发阶段，
+    暂时不对旧单主播数据库做自动迁移。
+
+    如果检测到旧 streams 表缺少 vtuber_id，
+    明确拒绝继续初始化，避免把旧数据
+    静默绑定到错误的 VTuber。
+    """
+
+    if not _table_exists(
+        connection,
+        "streams",
+    ):
+        return
+
+    columns = _table_columns(
+        connection,
+        "streams",
+    )
+
+    if "vtuber_id" not in columns:
+        raise RuntimeError(
+            "Legacy database schema detected: "
+            "streams.vtuber_id is missing. "
+            "Back up or remove the old development "
+            "database and re-import the archive."
+        )
+
+
 def init_db(
     connection: sqlite3.Connection,
 ) -> None:
+    _assert_schema_compatible(
+        connection
+    )
+
     connection.executescript(
         """
+        CREATE TABLE IF NOT EXISTS vtubers (
+            id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL
+        );
+
+
+        CREATE TABLE IF NOT EXISTS vtuber_sources (
+            vtuber_id TEXT NOT NULL,
+            source TEXT NOT NULL,
+            external_id TEXT,
+            display_name TEXT,
+
+            PRIMARY KEY (
+                vtuber_id,
+                source
+            ),
+
+            FOREIGN KEY (
+                vtuber_id
+            )
+                REFERENCES vtubers(id)
+                ON DELETE CASCADE
+        );
+
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_vtuber_sources_external_identity
+        ON vtuber_sources(
+            source,
+            external_id
+        )
+        WHERE external_id IS NOT NULL;
+
+
         CREATE TABLE IF NOT EXISTS streams (
             id TEXT PRIMARY KEY,
+
+            vtuber_id TEXT NOT NULL,
+
             month TEXT NOT NULL,
             live_time TEXT NOT NULL,
             publish_times TEXT NOT NULL,
+
             title TEXT NOT NULL,
             video_url TEXT NOT NULL,
-            status TEXT NOT NULL
+            status TEXT NOT NULL,
+
+            FOREIGN KEY (
+                vtuber_id
+            )
+                REFERENCES vtubers(id)
+                ON DELETE RESTRICT
         );
 
 
@@ -190,6 +303,14 @@ def init_db(
                     part_id
                 )
                 ON DELETE CASCADE
+        );
+
+
+        CREATE INDEX IF NOT EXISTS
+            idx_streams_vtuber_live_time
+        ON streams(
+            vtuber_id,
+            live_time DESC
         );
 
 
