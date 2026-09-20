@@ -409,8 +409,8 @@ class LocalSource:
             != vtuber.id
         ):
             raise ValueError(
-                "stream.creator_id "
-                "must match creator.id"
+                "stream.vtuber_id "
+                "must match vtuber.id"
             )
 
         self.stream = stream
@@ -548,6 +548,13 @@ class LocalSource:
                     ),
                 )
             )
+
+        vtuber_source = VtuberSource(
+            vtuber_id=self.vtuber.id,
+            source="local",
+            external_id=None,
+            display_name=self.vtuber.display_name,
+        )
 
         return ArchiveBundle(
             source="local",

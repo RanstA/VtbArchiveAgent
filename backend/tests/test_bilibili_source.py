@@ -1,3 +1,9 @@
+from app.domain.stream import (
+    make_stream_id,
+)
+from app.domain.vtuber import (
+    Vtuber,
+)
 from app.ingestion.bilibili_client import (
     BilibiliDanmakuItem,
     BilibiliPart,
@@ -5,6 +11,12 @@ from app.ingestion.bilibili_client import (
 )
 from app.ingestion.bilibili_source import (
     BilibiliSource,
+)
+
+
+TEST_VTUBER = Vtuber(
+    id="vtuber-test",
+    display_name="TestVTuber",
 )
 
 
@@ -65,7 +77,8 @@ class FakeBilibiliClient:
         BilibiliDanmakuItem
     ]:
         if (
-            part.page_index == 0
+            part.page_index
+            == 0
         ):
             return [
                 BilibiliDanmakuItem(
@@ -95,8 +108,11 @@ class FakeBilibiliClient:
 def test_bilibili_source_maps_to_domain():
     source = BilibiliSource(
         "BV1TEST",
-        client=FakeBilibiliClient(
-            authenticated=True
+        vtuber=TEST_VTUBER,
+        client=(
+            FakeBilibiliClient(
+                authenticated=True
+            )
         ),
     )
 
@@ -105,6 +121,57 @@ def test_bilibili_source_maps_to_domain():
     assert (
         bundle.source
         == "bilibili"
+    )
+
+    assert (
+        bundle.vtuber
+        == TEST_VTUBER
+    )
+
+    assert (
+        bundle.stream.vtuber_id
+        == TEST_VTUBER.id
+    )
+
+    assert (
+        bundle.stream.id
+        == make_stream_id(
+            vtuber_id=(
+                TEST_VTUBER.id
+            ),
+            live_time=(
+                bundle.stream.live_time
+            ),
+            title=(
+                bundle.stream.title
+            ),
+        )
+    )
+
+    assert (
+        len(
+            bundle.vtuber_sources
+        )
+        == 1
+    )
+
+    vtuber_source = (
+        bundle.vtuber_sources[0]
+    )
+
+    assert (
+        vtuber_source.vtuber_id
+        == TEST_VTUBER.id
+    )
+
+    assert (
+        vtuber_source.source
+        == "bilibili"
+    )
+
+    assert (
+        vtuber_source.display_name
+        == "TestVTuber"
     )
 
     assert (
@@ -141,7 +208,8 @@ def test_bilibili_source_maps_to_domain():
 
     assert [
         part.part_id
-        for part in bundle.parts
+        for part
+        in bundle.parts
     ] == [
         "p0",
         "p1",
@@ -187,14 +255,18 @@ def test_bilibili_source_maps_to_domain():
 def test_bilibili_source_keeps_parts_separate():
     source = BilibiliSource(
         "BV1TEST",
-        client=FakeBilibiliClient(),
+        vtuber=TEST_VTUBER,
+        client=(
+            FakeBilibiliClient()
+        ),
     )
 
     bundle = source.load()
 
     part_ids = [
         item.part_id
-        for item in bundle.danmaku
+        for item
+        in bundle.danmaku
     ]
 
     assert part_ids == [

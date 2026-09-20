@@ -280,7 +280,7 @@ class BilibiliSource:
         )
 
         stream_id = (
-            _make_stream_id(
+            make_stream_id(
                 vtuber_id=self.vtuber.id,
                 live_time = live_time,
                 title = video.title,
