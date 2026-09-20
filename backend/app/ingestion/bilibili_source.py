@@ -11,7 +11,7 @@ from app.domain.vtuber import (
     Vtuber,
 )
 from app.domain.danmaku import Danmaku
-from app.domain.stream import Stream
+from app.domain.stream import Stream, make_stream_id
 from app.domain.stream_part import StreamPart
 from app.ingestion.bilibili_client import (
     BilibiliClient,
@@ -51,28 +51,6 @@ class BilibiliAuthenticationError(
     RuntimeError
 ):
     pass
-
-
-def _make_stream_id(
-    live_time: datetime,
-    title: str,
-) -> str:
-    """
-    保持与现有本地 Stream ID 算法一致：
-    live_time + title -> UUID5。
-    """
-
-    key = (
-        f"{live_time.isoformat()}"
-        f"|{title.strip()}"
-    )
-
-    return str(
-        uuid.uuid5(
-            uuid.NAMESPACE_URL,
-            key,
-        )
-    )
 
 
 def _timestamp_to_china_datetime(

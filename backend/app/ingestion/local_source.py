@@ -3,7 +3,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from app.domain.creator import (
+from app.domain.vtuber import (
     Vtuber,
     VtuberSource,
 )

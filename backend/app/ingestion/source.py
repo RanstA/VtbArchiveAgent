@@ -9,7 +9,7 @@ from typing import (
 
 from app.domain.vtuber import (
     Vtuber,
-    VtuberSources,
+    VtuberSource,
 )
 from app.domain.danmaku import (
     Danmaku,
@@ -31,7 +31,7 @@ class ArchiveBundle:
     """
     source: str
     vtuber: Vtuber
-    vtuber_sources: list[VtuberSources]
+    vtuber_sources: list[VtuberSource]
     
     stream: Stream
     parts: list[StreamPart]
