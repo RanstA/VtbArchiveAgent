@@ -1,10 +1,16 @@
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
 
 class Settings(BaseSettings):
     archive_data_root: Path
+    database_path: Path = Path(
+        "vtuber_archive.db"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
