@@ -3,17 +3,25 @@ import ArchiveView from '@/views/ArchiveView.vue'
 import { appConfig, isMultiVtuberMode } from '@/config/app'
 import { TEMPORARY_MOCK_VTUBERS, useVtuberStore } from '@/stores/vtuber'
 
-const fallbackVtuberId = TEMPORARY_MOCK_VTUBERS[0]!.id
-const singleVtuberId = TEMPORARY_MOCK_VTUBERS.some(
-  (vtuber) => vtuber.id === appConfig.defaultVtuberId,
-)
-  ? appConfig.defaultVtuberId!
-  : fallbackVtuberId
+function resolveSingleVtuberId() {
+  if (isMultiVtuberMode) return undefined
+
+  const defaultVtuberId = appConfig.defaultVtuberId!
+  if (!TEMPORARY_MOCK_VTUBERS.some((vtuber) => vtuber.id === defaultVtuberId)) {
+    throw new Error(
+      `[VTuber config] Unknown VITE_DEFAULT_VTUBER_ID "${defaultVtuberId}" in the temporary frontend VTuber catalog.`,
+    )
+  }
+
+  return defaultVtuberId
+}
+
+const singleVtuberId = resolveSingleVtuberId()
 
 function rootDestination(): RouteLocationRaw {
   return isMultiVtuberMode
     ? { name: 'vtuber-select' }
-    : { name: 'archive', params: { vtuberId: singleVtuberId } }
+    : { name: 'archive', params: { vtuberId: singleVtuberId! } }
 }
 
 function legacyWorkspaceDestination(name: string, params: Record<string, string> = {}): RouteLocationRaw {
@@ -88,7 +96,7 @@ router.beforeEach((to) => {
   const routeVtuberId = String(to.params.vtuberId ?? '')
 
   if (!isMultiVtuberMode && routeVtuberId !== singleVtuberId) {
-    return { name: 'archive', params: { vtuberId: singleVtuberId } }
+    return { name: 'archive', params: { vtuberId: singleVtuberId! } }
   }
 
   if (!vtuberStore.setCurrentVtuber(routeVtuberId)) {
