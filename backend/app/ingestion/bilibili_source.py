@@ -6,7 +6,10 @@ from datetime import (
     timezone,
 )
 from typing import Literal
-
+from app.domain.vtuber import (
+    VtuberSource,
+    Vtuber,
+)
 from app.domain.danmaku import Danmaku
 from app.domain.stream import Stream
 from app.domain.stream_part import StreamPart
@@ -75,13 +78,6 @@ def _make_stream_id(
 def _timestamp_to_china_datetime(
     timestamp: int,
 ) -> datetime:
-    """
-    转成北京时间的 naive datetime。
-
-    现有本地 CSV Stream 时间也是业务时间，
-    为避免混用 aware / naive datetime，
-    Domain 内暂时保持 naive。
-    """
 
     return (
         datetime.fromtimestamp(
@@ -99,12 +95,6 @@ def infer_live_time(
 ) -> tuple[datetime, str]:
     """
     优先从直播回放标题识别真正直播时间。
-
-    示例：
-    【直播回放】演唱会归来！
-    2026年08月16日21点场
-
-    如果识别失败，再 fallback 到视频发布时间。
 
     返回：
         (live_time, inference_basis)
@@ -152,25 +142,13 @@ def infer_live_time(
 class BilibiliSource:
     """
     Bilibili Archive Source。
-
-    auth_mode:
-
-    guest
-        永远不使用登录态。
-
-    authenticated
-        必须存在有效缓存 Session，
-        否则直接报错。
-
-    auto
-        有有效 Session 就登录读取；
-        没有或失效就自动降级 Guest。
     """
 
     def __init__(
         self,
         bvid: str,
         *,
+        vtuber: Vtuber,
         auth_mode: AuthMode = "auto",
         session_store: (
             BilibiliSessionStore
@@ -197,6 +175,8 @@ class BilibiliSource:
                 "Invalid auth_mode: "
                 f"{auth_mode}"
             )
+            
+        self.vtuber= vtuber
 
         self.auth_mode = (
             auth_mode
@@ -323,13 +303,15 @@ class BilibiliSource:
 
         stream_id = (
             _make_stream_id(
-                live_time,
-                video.title,
+                vtuber_id=self.vtuber.id,
+                live_time = live_time,
+                title = video.title,
             )
         )
 
         stream = Stream(
             id=stream_id,
+            vtuber_id=self.vtuber.id,
             month=(
                 live_time.strftime(
                     "%Y-%m"
@@ -400,9 +382,23 @@ class BilibiliSource:
                         ),
                     )
                 )
+        vtuber_source = (
+            VtuberSource(
+                vtuber_id=(
+                    self.vtuber.id
+                ),
+                source="bilibili",
+                external_id=None,
+                display_name=(
+                    video.owner
+                ),
+            )
+        )
 
         return ArchiveBundle(
             source="bilibili",
+            vtuber=self.vtuber,
+            vtuber_sources=[vtuber_source],
             stream=stream,
             parts=parts,
             danmaku=danmaku,

@@ -1,9 +1,26 @@
-from dataclasses import dataclass, field
-from typing import Any, Protocol
+from dataclasses import (
+    dataclass,
+    field,
+)
+from typing import (
+    Any,
+    Protocol,
+)
 
-from app.domain.danmaku import Danmaku
-from app.domain.stream import Stream
-from app.domain.stream_part import StreamPart
+from app.domain.vtuber import (
+    Vtuber,
+    VtuberSources,
+)
+from app.domain.danmaku import (
+    Danmaku,
+)
+from app.domain.stream import (
+    Stream,
+)
+from app.domain.stream_part import (
+    StreamPart,
+)
+
 
 
 @dataclass(slots=True)
@@ -13,9 +30,13 @@ class ArchiveBundle:
     Stream / StreamPart / Danmaku。
     """
     source: str
+    vtuber: Vtuber
+    vtuber_sources: list[VtuberSources]
+    
     stream: Stream
     parts: list[StreamPart]
     danmaku: list[Danmaku]
+    
     source_metadata: dict[str, Any] = field(
         default_factory=dict
     )
@@ -24,3 +45,4 @@ class ArchiveSource(Protocol):
 
     def load(self) -> ArchiveBundle:
         ...
+        

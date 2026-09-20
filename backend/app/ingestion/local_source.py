@@ -3,12 +3,25 @@ import re
 import unicodedata
 from pathlib import Path
 
-from app.domain.danmaku import Danmaku
-from app.domain.stream import Stream
-from app.domain.stream_part import StreamPart
-from app.ingestion.ass_parser import parse_ass
-from app.ingestion.source import ArchiveBundle
-
+from app.domain.creator import (
+    Vtuber,
+    VtuberSource,
+)
+from app.domain.danmaku import (
+    Danmaku,
+)
+from app.domain.stream import (
+    Stream,
+)
+from app.domain.stream_part import (
+    StreamPart,
+)
+from app.ingestion.ass_parser import (
+    parse_ass,
+)
+from app.ingestion.source import (
+    ArchiveBundle,
+)
 
 MEDIA_SUFFIXES = {
     ".mp4",
@@ -28,13 +41,7 @@ def normalize_match_key(
 ) -> str:
     """
     仅用于本地文件 / 目录匹配。
-
     不修改 Domain 中保存的原始标题。
-
-    处理：
-    - Unicode NFKC
-    - Windows 文件名非法字符
-    - 首尾空白
     """
     value = unicodedata.normalize(
         "NFKC",
@@ -53,18 +60,12 @@ def expected_month_directory(
     stream: Stream,
 ) -> str:
     """
-    根据直播时间得到旧归档结构中的月份目录。
-
-    例如：
-        2025-09-11
-        ->
-        2025年9月录播
+    根据直播时间得到旧归档结构中的月份目录
     """
     return (
         f"{stream.live_time.year}年"
         f"{stream.live_time.month}月录播"
     )
-
 
 def build_directory_index(
     archive_root: Path,
@@ -102,16 +103,6 @@ def resolve_nested_stream_directory(
     stream: Stream,
     archive_root: Path,
 ) -> Path | None:
-    """
-    查找旧式目录结构中的 Stream 目录。
-
-    规则保持和现有 import_archive.py 一致：
-
-    1. 标题唯一完全匹配
-    2. 多个完全匹配时优先正确月份
-    3. 正确月份内做文件名安全归一化匹配
-    4. 不做 fuzzy matching
-    """
     directory_index = (
         build_directory_index(
             archive_root
@@ -234,18 +225,6 @@ def resolve_nested_stream_directory(
 def _group_media_files(
     paths: list[Path],
 ) -> list[dict[str, Path]]:
-    """
-    将同 stem 的 mp4 / ass / xml
-    归为一个 Part。
-
-    最终 Part ID 不使用文件名中的数字，
-    而统一按稳定排序映射为：
-
-        p0
-        p1
-        p2
-        ...
-    """
     groups: dict[
         str,
         dict[str, Path],
@@ -282,15 +261,13 @@ def _group_media_files(
         )
     ]
 
-
 def _scan_nested_parts(
     directory: Path,
 ) -> list[
     dict[str, Path]
 ]:
     paths = [
-        path
-        for path in directory.iterdir()
+        path for path in directory.iterdir()
         if (
             path.is_file()
             and path.suffix.lower()
@@ -298,47 +275,24 @@ def _scan_nested_parts(
         )
     ]
 
-    return _group_media_files(
-        paths
-    )
-
+    return _group_media_files(paths)
 
 def _flat_file_matches_stream(
     path: Path,
     stream: Stream,
 ) -> bool:
-    """
-    判断 flat layout 中的文件是否属于该 Stream。
-
-    示例：
-
-    Stream title:
-        【直播回放】いろいろ聊 2025年09月11日19点场
-
-    文件：
-        【直播回放】いろいろ聊 2025年09月11日19点场_32316327100.ass
-
-    允许：
-        stem == title
-        stem 以 title + "_" 开头
-
-    不做模糊匹配。
-    """
     title_key = normalize_match_key(
         stream.title
     )
-
     stem_key = normalize_match_key(
         path.stem
     )
-
     return (
         stem_key == title_key
         or stem_key.startswith(
             title_key + "_"
         )
     )
-
 
 def _scan_flat_parts(
     archive_root: Path,
@@ -347,8 +301,7 @@ def _scan_flat_parts(
     dict[str, Path]
 ]:
     paths = [
-        path
-        for path in archive_root.iterdir()
+        path for path in archive_root.iterdir()
         if (
             path.is_file()
             and path.suffix.lower()
@@ -360,10 +313,7 @@ def _scan_flat_parts(
         )
     ]
 
-    return _group_media_files(
-        paths
-    )
-
+    return _group_media_files(paths)
 
 def _build_stream_parts(
     stream: Stream,
@@ -441,6 +391,7 @@ class LocalSource:
         stream: Stream,
         archive_root: Path,
         *,
+        vtuber: Vtuber,
         layout: str = "auto",
     ) -> None:
         if layout not in {
@@ -452,8 +403,18 @@ class LocalSource:
                 "layout must be one of: "
                 "auto, nested, flat"
             )
+        
+        if (
+            stream.vtuber_id
+            != vtuber.id
+        ):
+            raise ValueError(
+                "stream.creator_id "
+                "must match creator.id"
+            )
 
         self.stream = stream
+        self.vtuber = vtuber
         self.archive_root = Path(
             archive_root
         )
@@ -590,6 +551,10 @@ class LocalSource:
 
         return ArchiveBundle(
             source="local",
+            vtuber=self.vtuber,
+            vtuber_sources=[
+                vtuber_source
+            ],
             stream=self.stream,
             parts=parts,
             danmaku=danmaku,
