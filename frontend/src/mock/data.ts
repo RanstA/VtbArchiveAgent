@@ -3,6 +3,8 @@ import type { Event, Evidence, HighlightCandidate, Stream } from '@/types'
 export const mockStreams: Stream[] = [
   {
     id: 'stream-001',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '深夜杂谈｜聊聊新衣装准备和最近看的电影',
     liveTime: '2026-08-28T21:05:00+08:00',
     bvIds: ['BV1AR4y1N7xQ', 'BV1w7HYziExt'],
@@ -12,6 +14,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-002',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '恐怖游戏回｜从强装镇定到光速下播',
     liveTime: '2026-08-24T19:30:00+08:00',
     bvIds: ['BV1oK4y1P2Lm'],
@@ -21,6 +25,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-003',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '歌回 Archive #18｜夏末点歌台',
     liveTime: '2026-08-17T20:00:00+08:00',
     bvIds: ['BV1XL411c7Qe'],
@@ -30,6 +36,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-004',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '联动复盘｜那个全员沉默的三十秒',
     liveTime: '2026-08-09T20:32:00+08:00',
     bvIds: ['BV1vM4y1D9as'],
@@ -39,6 +47,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-005',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '早安电台｜一周新闻与棉花糖',
     liveTime: '2026-07-31T08:03:00+08:00',
     bvIds: ['BV1aT421k7Rp'],
@@ -48,6 +58,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-006',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '生日会 2026｜谢谢你们一直都在',
     liveTime: '2026-07-20T19:58:00+08:00',
     bvIds: ['BV1rZ4y1V8wy'],
@@ -57,6 +69,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-007',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '建造游戏耐久｜今晚一定做完车站',
     liveTime: '2026-07-12T18:10:00+08:00',
     bvIds: ['BV19N4y1H6cd'],
@@ -66,6 +80,8 @@ export const mockStreams: Stream[] = [
   },
   {
     id: 'stream-008',
+    vtuberId: 'mikoto',
+    vtuberName: '蜜言',
     title: '月度总结｜六月发生了什么',
     liveTime: '2026-07-02T20:05:00+08:00',
     bvIds: ['BV1qU4y1F3pp'],

@@ -1,14 +1,25 @@
 export interface Stream {
   id: string
+
+  vtuberId: string
+  vtuberName: string
+
   title: string
   liveTime: string
   bvIds: string[]
+
   hasDanmaku: boolean
   hasEvents: boolean
+
   durationMs?: number
 }
 
-export type EventType = 'talk' | 'gameplay' | 'reaction' | 'announcement' | 'collab'
+export type EventType =
+  | 'talk'
+  | 'gameplay'
+  | 'reaction'
+  | 'announcement'
+  | 'collab'
 
 export interface Event {
   id: string
@@ -38,7 +49,10 @@ export interface Evidence {
   timestampMs: number
 }
 
-export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+export type ReviewStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
 
 export interface HighlightCandidate {
   event: Event
@@ -61,7 +75,10 @@ export interface EventSearchResult {
   matchedText?: string
 }
 
-export type AgentTraceStatus = 'done' | 'active' | 'pending'
+export type AgentTraceStatus =
+  | 'done'
+  | 'active'
+  | 'pending'
 
 export interface AgentTraceStep {
   id: string
@@ -72,7 +89,9 @@ export interface AgentTraceStep {
 
 export interface InvestigationResult {
   query: string
+
   trace: AgentTraceStep[]
+
   candidates: Array<{
     event: Event
     stream: Stream

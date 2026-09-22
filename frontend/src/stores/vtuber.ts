@@ -1,40 +1,15 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getVtubers, type Vtuber } from '@/api/vtubers'
+import {
+  getVtubers,
+  type Vtuber,
+} from '@/api/vtubers'
 
 export type { Vtuber } from '@/api/vtubers'
-
-/**
- * Phase 2B-1 过渡用。
- *
- * 当前 router/index.ts 和 vite.config.ts
- * 仍然依赖这个静态 catalog 做配置校验。
- *
- * 真正展示给用户的 VTuber 列表已经不再使用它，
- * 而是由 GET /vtubers 加载。
- *
- * Phase 2B-2 改造 Router 后会彻底删除。
- */
-export const TEMPORARY_MOCK_VTUBERS: readonly Vtuber[] = [
-  {
-    id: 'mikoto',
-    displayName: '蜜言',
-  },
-  {
-    id: 'aza',
-    displayName: '阿萨Aza',
-  },
-]
 
 export const useVtuberStore = defineStore(
   'vtuber',
   () => {
-    /**
-     * 真正的运行时 catalog。
-     *
-     * 不再用 TEMPORARY_MOCK_VTUBERS 初始化，
-     * 页面必须通过 GET /vtubers 获取。
-     */
     const vtubers = ref<Vtuber[]>([])
 
     const loaded = ref(false)
@@ -43,6 +18,14 @@ export const useVtuberStore = defineStore(
 
     const currentVtuberId = ref<string>()
 
+    /**
+     * 同一时间只允许一个 catalog 请求。
+     *
+     * Router guard 和页面可能同时请求 VTuber catalog，
+     * 共用这个 Promise，避免重复 GET /vtubers。
+     */
+    let loadPromise: Promise<boolean> | null = null
+
     const currentVtuber = computed(() =>
       vtubers.value.find(
         (vtuber) =>
@@ -50,28 +33,75 @@ export const useVtuberStore = defineStore(
       ),
     )
 
-    async function loadVtubers() {
-      if (loaded.value) {
-        return
-      }
-
+    function performLoad(): Promise<boolean> {
       loading.value = true
       error.value = ''
 
-      try {
-        vtubers.value = await getVtubers()
-        loaded.value = true
-      } catch (reason) {
-        vtubers.value = []
-        loaded.value = false
+      const request = getVtubers()
+        .then((result) => {
+          vtubers.value = result
 
-        error.value =
-          reason instanceof Error
-            ? reason.message
-            : '无法加载 VTuber 列表'
-      } finally {
-        loading.value = false
+          /**
+           * 空数组也是一次成功响应。
+           *
+           * loaded 表示：
+           * “已经成功读取过 catalog”
+           * 而不是：
+           * “catalog 至少有一个 VTuber”。
+           */
+          loaded.value = true
+
+          return true
+        })
+        .catch((reason) => {
+          vtubers.value = []
+          loaded.value = false
+
+          error.value =
+            reason instanceof Error
+              ? reason.message
+              : '无法加载 VTuber 列表'
+
+          return false
+        })
+        .finally(() => {
+          loading.value = false
+          loadPromise = null
+        })
+
+      loadPromise = request
+
+      return request
+    }
+
+    function loadVtubers(): Promise<boolean> {
+      if (loaded.value) {
+        return Promise.resolve(true)
       }
+
+      if (loadPromise) {
+        return loadPromise
+      }
+
+      return performLoad()
+    }
+
+    function reloadVtubers(): Promise<boolean> {
+      if (loadPromise) {
+        return loadPromise
+      }
+
+      loaded.value = false
+
+      return performLoad()
+    }
+
+    function ensureLoaded(): Promise<boolean> {
+      if (loaded.value) {
+        return Promise.resolve(true)
+      }
+
+      return loadVtubers()
     }
 
     function hasVtuber(
@@ -110,6 +140,9 @@ export const useVtuberStore = defineStore(
       currentVtuberId,
 
       loadVtubers,
+      reloadVtubers,
+      ensureLoaded,
+
       hasVtuber,
       setCurrentVtuber,
       clearCurrentVtuber,
