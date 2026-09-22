@@ -430,8 +430,10 @@ class BilibiliClient:
 
         stripped = body.lstrip()
 
-        if stripped.startswith(
+        if body.startswith(
             b"{"
+        ) or body.startswith(
+            b"["
         ):
             try:
                 error_payload = (
@@ -441,7 +443,10 @@ class BilibiliClient:
                         )
                     )
                 )
-            except Exception:
+            except (
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+            ):
                 error_payload = (
                     body[:200]
                 )
@@ -450,6 +455,15 @@ class BilibiliClient:
                 "Bilibili returned JSON "
                 "instead of protobuf: "
                 f"{error_payload}"
+            )
+
+        if body.startswith(
+            b"<"
+        ):
+            raise BilibiliApiError(
+                "Bilibili returned "
+                "HTML/XML instead of "
+                "protobuf"
             )
 
         if stripped.startswith(
