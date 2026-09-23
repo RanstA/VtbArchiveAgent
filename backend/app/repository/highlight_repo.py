@@ -1,6 +1,8 @@
 import sqlite3
 
-from app.domain.highlight import Highlight
+from app.domain.highlight import (
+    Highlight,
+)
 
 
 def replace_highlights_for_stream(
@@ -11,26 +13,8 @@ def replace_highlights_for_stream(
     """
     用最新 detector 结果替换某场 Stream
     当前保存的全部 Highlights。
-
-    整个过程位于同一事务：
-
-        DELETE old
-        +
-        INSERT new
-
-    如果 INSERT 过程中失败，
-    DELETE 也会一起 rollback。
-
-    因此不会出现：
-
-        旧数据删掉了
-        新数据只写了一半
-
-    的状态。
     """
 
-    # 防止调用方误把其他 Stream 的 Highlight
-    # 混进当前批次。
     for highlight in highlights:
         if (
             highlight.stream_id
@@ -65,10 +49,6 @@ def replace_highlights_for_stream(
         for highlight in highlights
     ]
 
-    # sqlite3 connection context manager：
-    #
-    # 正常结束 -> commit
-    # 发生异常 -> rollback
     with connection:
         connection.execute(
             """
@@ -128,20 +108,6 @@ def list_highlights_by_stream(
     connection: sqlite3.Connection,
     stream_id: str,
 ) -> list[Highlight]:
-    """
-    查询某场 Stream 当前保存的所有 Highlight。
-
-    当前返回顺序：
-
-        part_id
-        ->
-        Part 内 start_ms
-
-    后面做正式 Timeline 时，
-    再统一处理 p0 / p1 / p2
-    拼接后的全局时间。
-    """
-
     rows = connection.execute(
         """
         SELECT
@@ -196,11 +162,6 @@ def get_highlight_by_id(
     connection: sqlite3.Connection,
     highlight_id: str,
 ) -> Highlight | None:
-    """
-    根据稳定 Highlight ID
-    查询单个高光。
-    """
-
     row = connection.execute(
         """
         SELECT
@@ -247,13 +208,119 @@ def get_highlight_by_id(
     )
 
 
+def search_highlights_for_vtuber(
+    connection: sqlite3.Connection,
+    *,
+    vtuber_id: str,
+    limit: int = 8,
+    min_score: float = 0.85,
+) -> list[dict]:
+    """
+    Event Scout 的 coarse retrieval。
+
+    Highlight 是观众反应候选，
+    这里只根据 detector signal
+    做第一阶段召回。
+    """
+
+    if limit < 1:
+        raise ValueError(
+            "limit must be >= 1"
+        )
+
+    if not (
+        0.0
+        <= min_score
+        <= 1.0
+    ):
+        raise ValueError(
+            "min_score must be between 0 and 1"
+        )
+
+    rows = connection.execute(
+        """
+        SELECT
+            h.id,
+            h.stream_id,
+            h.part_id,
+
+            h.start_ms,
+            h.end_ms,
+            h.peak_ms,
+
+            h.score,
+
+            h.density_score,
+            h.repetition_score,
+            h.reaction_score,
+
+            h.danmaku_count,
+            h.unique_text_count,
+
+            h.repetition_ratio,
+            h.reaction_ratio,
+
+            h.laugh_count,
+            h.question_count,
+            h.exclamation_count,
+
+            h.detector_version,
+
+            s.title,
+            s.live_time,
+            v.display_name
+
+        FROM highlights AS h
+
+        JOIN streams AS s
+            ON s.id = h.stream_id
+
+        JOIN vtubers AS v
+            ON v.id = s.vtuber_id
+
+        WHERE
+            s.vtuber_id = ?
+            AND h.score >= ?
+
+        ORDER BY
+            h.score DESC,
+            s.live_time DESC
+
+        LIMIT ?
+        """,
+        (
+            vtuber_id,
+            min_score,
+            limit,
+        ),
+    ).fetchall()
+
+    results: list[
+        dict
+    ] = []
+
+    for row in rows:
+        highlight = (
+            _row_to_highlight(
+                row[:18]
+            )
+        )
+
+        results.append(
+            {
+                "highlight": highlight,
+                "stream_title": row[18],
+                "live_time": row[19],
+                "vtuber_name": row[20],
+            }
+        )
+
+    return results
+
+
 def _row_to_highlight(
     row: tuple,
 ) -> Highlight:
-    """
-    SQLite row -> Highlight domain model。
-    """
-
     return Highlight(
         id=row[0],
         stream_id=row[1],

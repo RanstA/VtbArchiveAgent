@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+from fastapi import (
+    FastAPI,
+)
 
+from app.api.investigate import (
+    router as investigate_router,
+)
 from app.api.streams import (
     router as streams_router,
 )
@@ -17,18 +22,23 @@ app = FastAPI(
 )
 
 
-@app.get("/health")
+@app.get(
+    "/health"
+)
 def health():
     return {
         "status": "ok",
     }
 
 
-@app.get("/debug/data-root")
+@app.get(
+    "/debug/data-root"
+)
 def data_root():
     return {
         "path": str(
-            settings.archive_data_root
+            settings
+            .archive_data_root
         ),
         "exists": (
             settings
@@ -44,4 +54,8 @@ app.include_router(
 
 app.include_router(
     streams_router
+)
+
+app.include_router(
+    investigate_router
 )

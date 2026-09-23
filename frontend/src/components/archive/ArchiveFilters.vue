@@ -1,39 +1,55 @@
 <script setup lang="ts">
+type ArchiveStatus =
+  | 'all'
+  | 'danmaku'
+  | 'highlights'
+  | 'pending'
+
 defineProps<{
   query: string
-  status: string
+  status: ArchiveStatus
   count: number
   loading: boolean
 }>()
 
 const emit = defineEmits<{
   'update:query': [value: string]
-
-  'update:status': [
-    value:
-      | 'all'
-      | 'danmaku'
-      | 'highlights'
-      | 'pending'
-  ]
-
+  'update:status': [value: ArchiveStatus]
   search: []
 }>()
+
+function handleQueryInput(
+  event: Event,
+) {
+  const target =
+    event.target as HTMLInputElement
+
+  emit(
+    'update:query',
+    target.value,
+  )
+}
+
+function handleStatusChange(
+  event: Event,
+) {
+  const target =
+    event.target as HTMLSelectElement
+
+  emit(
+    'update:status',
+    target.value as ArchiveStatus,
+  )
+}
 </script>
 
 <template>
   <form
     class="filter-bar"
-    @submit.prevent="
-      emit('search')
-    "
+    @submit.prevent="emit('search')"
   >
-    <label
-      class="search-field"
-    >
-      <span
-        class="sr-only"
-      >
+    <label class="search-field">
+      <span class="sr-only">
         搜索标题或 BV 号
       </span>
 
@@ -46,45 +62,18 @@ const emit = defineEmits<{
         :value="query"
         type="search"
         placeholder="搜索标题或 BV 号"
-        @input="
-          emit(
-            'update:query',
-            (
-              $event.target
-              as HTMLInputElement
-            ).value,
-          )
-        "
+        @input="handleQueryInput"
       />
 
-      <kbd>
-        ↵
-      </kbd>
+      <kbd>↵</kbd>
     </label>
 
-    <label
-      class="select-field"
-    >
-      <span>
-        状态
-      </span>
+    <label class="select-field">
+      <span>状态</span>
 
       <select
         :value="status"
-        @change="
-          emit(
-            'update:status',
-            (
-              $event.target
-              as HTMLSelectElement
-            ).value
-              as
-                | 'all'
-                | 'danmaku'
-                | 'highlights'
-                | 'pending',
-          )
-        "
+        @change="handleStatusChange"
       >
         <option value="all">
           全部档案
@@ -105,10 +94,7 @@ const emit = defineEmits<{
     </label>
 
     <button
-      class="
-        button
-        button-secondary
-      "
+      class="button button-secondary"
       type="submit"
       :disabled="loading"
     >
@@ -119,9 +105,7 @@ const emit = defineEmits<{
       }}
     </button>
 
-    <span
-      class="result-count"
-    >
+    <span class="result-count">
       {{ count }} 场直播
     </span>
   </form>
