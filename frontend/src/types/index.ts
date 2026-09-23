@@ -9,11 +9,68 @@ export interface Stream {
   bvIds: string[]
 
   hasDanmaku: boolean
-  hasEvents: boolean
 
-  durationMs?: number
+  /**
+   * 当前真实后端字段。
+   */
+  hasHighlights?: boolean
+  highlightCount?: number
+
+  /**
+   * 旧 mock / Event UI 暂时保留。
+   * 后续迁移 Search / Investigate 时删除。
+   */
+  hasEvents?: boolean
+
+  durationMs?: number | null
 }
 
+export interface StreamDetail
+  extends Stream {
+  partCount: number
+}
+
+export interface DetectedHighlight {
+  id: string
+
+  streamId: string
+  partId: string
+
+  startMs: number
+  endMs: number
+  peakMs: number
+
+  score: number
+
+  densityScore: number
+  repetitionScore: number
+  reactionScore: number
+
+  danmakuCount: number
+  uniqueTextCount: number
+
+  repetitionRatio: number
+  reactionRatio: number
+
+  laughCount: number
+  questionCount: number
+  exclamationCount: number
+
+  detectorVersion: string
+}
+
+
+/**
+ * 下面是旧 Event frontend model。
+ *
+ * 暂时保留给：
+ *
+ * Search
+ * Highlights legacy page
+ * Investigate mock
+ *
+ * 不再用于 Stream Timeline。
+ */
 export type EventType =
   | 'talk'
   | 'gameplay'

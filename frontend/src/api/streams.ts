@@ -12,8 +12,11 @@ import {
 } from '@/mock/data'
 
 import type {
+  DetectedHighlight,
   Stream,
+  StreamDetail,
 } from '@/types'
+
 
 export interface StreamListParams {
   vtuberId: string
@@ -23,9 +26,34 @@ export interface StreamListParams {
   status?:
     | 'all'
     | 'danmaku'
-    | 'events'
+    | 'highlights'
     | 'pending'
 }
+
+
+function normalizeMockStream(
+  stream: Stream,
+): Stream {
+  const hasHighlights =
+    stream.hasHighlights
+    ?? stream.hasEvents
+    ?? false
+
+  return {
+    ...stream,
+
+    hasHighlights,
+
+    highlightCount:
+      stream.highlightCount
+      ?? (
+        hasHighlights
+          ? 1
+          : 0
+      ),
+  }
+}
+
 
 export async function getStreams(
   params: StreamListParams,
@@ -66,8 +94,13 @@ export async function getStreams(
       ?.trim()
       .toLocaleLowerCase()
 
+  const normalized =
+    mockStreams.map(
+      normalizeMockStream,
+    )
+
   const result =
-    mockStreams.filter(
+    normalized.filter(
       (stream) => {
         const matchesVtuber =
           stream.vtuberId
@@ -85,6 +118,10 @@ export async function getStreams(
                 .includes(query),
           )
 
+        const hasHighlights =
+          stream.hasHighlights
+          ?? false
+
         const matchesStatus =
           !params.status
           || params.status
@@ -96,13 +133,13 @@ export async function getStreams(
           )
           || (
             params.status
-              === 'events'
-            && stream.hasEvents
+              === 'highlights'
+            && hasHighlights
           )
           || (
             params.status
               === 'pending'
-            && !stream.hasEvents
+            && !hasHighlights
           )
 
         return (
@@ -113,24 +150,67 @@ export async function getStreams(
       },
     )
 
-  return mockRequest(result)
+  return mockRequest(
+    result,
+  )
 }
+
 
 export async function getStream(
   id: string,
 ): Promise<
-  Stream | undefined
+  StreamDetail | undefined
 > {
   if (!useMockApi) {
-    return request<Stream>(
+    return request<StreamDetail>(
       `/streams/${id}`,
     )
   }
 
-  return mockRequest(
+  const stream =
     mockStreams.find(
-      (stream) =>
-        stream.id === id,
+      (item) =>
+        item.id === id,
+    )
+
+  if (!stream) {
+    return mockRequest(
+      undefined,
+    )
+  }
+
+  return mockRequest({
+    ...normalizeMockStream(
+      stream,
     ),
+
+    partCount: 1,
+  })
+}
+
+
+export async function getStreamHighlights(
+  id: string,
+): Promise<
+  DetectedHighlight[]
+> {
+  if (!useMockApi) {
+    return request<
+      DetectedHighlight[]
+    >(
+      `/streams/${id}/highlights`,
+    )
+  }
+
+  /**
+   * 当前 mockHighlights 还是旧
+   * Event-based HighlightCandidate。
+   *
+   * 不强行把两个模型混在一起。
+   * 真实 Highlight Timeline
+   * 只在 real API 模式工作。
+   */
+  return mockRequest(
+    [],
   )
 }

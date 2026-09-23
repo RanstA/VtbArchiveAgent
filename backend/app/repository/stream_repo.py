@@ -53,7 +53,6 @@ def insert_stream(
         ),
     )
 
-    # 当前 Stream 的 BV 关系重新同步。
     connection.execute(
         """
         DELETE FROM stream_bv_ids
@@ -79,6 +78,30 @@ def insert_stream(
             in stream.bv_ids
         ],
     )
+
+
+def _row_to_stream_dict(
+    row: tuple,
+) -> dict:
+    return {
+        "id": row[0],
+        "vtuber_id": row[1],
+        "vtuber_name": row[2],
+        "title": row[3],
+        "live_time": row[4],
+        "status": row[5],
+        "bv_ids": (
+            row[6].split(",")
+            if row[6]
+            else []
+        ),
+        "has_danmaku": bool(
+            row[7]
+        ),
+        "highlight_count": int(
+            row[8]
+        ),
+    }
 
 
 def list_streams(
@@ -131,7 +154,14 @@ def list_streams(
                     sp.stream_id = s.id
 
                 LIMIT 1
-            ) AS has_danmaku
+            ) AS has_danmaku,
+
+            (
+                SELECT COUNT(*)
+                FROM highlights AS h
+                WHERE
+                    h.stream_id = s.id
+            ) AS highlight_count
 
         FROM streams AS s
 
@@ -169,26 +199,83 @@ def list_streams(
         ),
     ).fetchall()
 
-    result = []
-
-    for row in rows:
-        result.append(
-            {
-                "id": row[0],
-                "vtuber_id": row[1],
-                "vtuber_name": row[2],
-                "title": row[3],
-                "live_time": row[4],
-                "status": row[5],
-                "bv_ids": (
-                    row[6].split(",")
-                    if row[6]
-                    else []
-                ),
-                "has_danmaku": bool(
-                    row[7]
-                ),
-            }
+    return [
+        _row_to_stream_dict(
+            row
         )
+        for row in rows
+    ]
 
-    return result
+
+def get_stream_by_id(
+    connection: sqlite3.Connection,
+    stream_id: str,
+) -> dict | None:
+    normalized_stream_id = (
+        stream_id.strip()
+    )
+
+    if not normalized_stream_id:
+        return None
+
+    row = connection.execute(
+        """
+        SELECT
+            s.id,
+            s.vtuber_id,
+            v.display_name,
+            s.title,
+            s.live_time,
+            s.status,
+
+            (
+                SELECT GROUP_CONCAT(
+                    b.bv_id
+                )
+                FROM stream_bv_ids AS b
+                WHERE
+                    b.stream_id = s.id
+            ) AS bv_ids,
+
+            EXISTS (
+                SELECT 1
+                FROM stream_parts AS sp
+
+                JOIN danmaku AS d
+                    ON d.stream_part_id
+                    = sp.id
+
+                WHERE
+                    sp.stream_id = s.id
+
+                LIMIT 1
+            ) AS has_danmaku,
+
+            (
+                SELECT COUNT(*)
+                FROM highlights AS h
+                WHERE
+                    h.stream_id = s.id
+            ) AS highlight_count
+
+        FROM streams AS s
+
+        JOIN vtubers AS v
+            ON v.id = s.vtuber_id
+
+        WHERE
+            s.id = ?
+
+        LIMIT 1
+        """,
+        (
+            normalized_stream_id,
+        ),
+    ).fetchone()
+
+    if row is None:
+        return None
+
+    return _row_to_stream_dict(
+        row
+    )
