@@ -310,6 +310,10 @@ class EventScout:
                     "",
                 )
             ).strip()
+            
+            print("===== RAW KIMI CONTENT =====")
+            print(content[:500])
+            print("============================")
 
             draft = (
                 self._parse_final(
