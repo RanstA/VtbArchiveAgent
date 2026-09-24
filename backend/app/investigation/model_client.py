@@ -72,7 +72,7 @@ class OpenAICompatibleChatClient:
             "tool_choice": (
                 "auto"
             ),
-            "temperature": 0.1,
+            "temperature": 1,
         }
 
         try:
@@ -90,7 +90,8 @@ class OpenAICompatibleChatClient:
         except httpx.HTTPError as exc:
             raise ModelClientError(
                 "Event Scout model request failed: "
-                f"{exc}"
+                f"{exc}\n"
+                f"response={response.text if 'response' in locals() else ''}"
             ) from exc
 
         try:
