@@ -21,7 +21,7 @@ from app.investigation.tools import (
     EventScoutTools,
 )
 
-from app.agent.prompts.loarder import load_prompt
+from app.agent.prompts.loader import load_prompt
 
 
 class EventScoutError(
