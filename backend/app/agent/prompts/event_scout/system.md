@@ -84,6 +84,14 @@
 
 最终输出必须是 JSON。
 
+每个 finding 必须严格区分：
+
+- observation:
+  基于检索到的 Highlight 和 Danmaku 证据，可以直接观察到的现象。
+
+- confidence:
+  对该 observation 总结是否准确的可信程度。
+
 格式：
 
 {
@@ -91,7 +99,7 @@
   "findings": [
     {
       "highlight_id": "",
-      "audience_summary": "",
+      "observation": "",
       "confidence": 0.0,
       "danmaku_ids": []
     }
