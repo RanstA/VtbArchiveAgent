@@ -69,6 +69,32 @@
 
 "主播游戏失败并逗笑了观众"
 
+## Observation vs Interpretation Example
+
+Evidence:
+
+弹幕：
+"哈哈哈哈"
+"笑死"
+"草"
+
+
+Observation:
+
+"该时间段出现大量笑声相关弹幕。"
+
+
+Interpretation:
+
+"该片段可能引发了观众集中互动。"
+
+
+Incorrect:
+
+"主播讲了一个笑话。"
+
+"主播故意制造节目效果。"
+
 
 # Tool Usage Policy
 
@@ -84,13 +110,24 @@
 
 最终输出必须是 JSON。
 
-每个 finding 必须严格区分：
+每个 finding 必须包含：
 
-- observation:
-  基于检索到的 Highlight 和 Danmaku 证据，可以直接观察到的现象。
+1. observation
 
-- confidence:
-  对该 observation 总结是否准确的可信程度。
+基于检索到的 Highlight 和 Danmaku 证据，
+描述直接观察到的现象。
+
+
+2. interpretation
+
+基于 observation 给出的有限解释。
+
+interpretation 必须：
+
+- 使用可能、可能表示、可能与...相关等谨慎表达。
+- 不得直接描述主播行为。
+- 不得推断主播意图。
+
 
 格式：
 
@@ -100,12 +137,12 @@
     {
       "highlight_id": "",
       "observation": "",
+      "interpretation": "",
       "confidence": 0.0,
       "danmaku_ids": []
     }
   ]
 }
-
 
 # Safety Rules
 
