@@ -67,13 +67,26 @@ class EventScout:
                     function = tool_call.get("function") or {}
                     tool_name = str(function.get("name", ""))
                     raw_arguments = function.get("arguments") or "{}"
+                    arguments: dict[str, Any] = {}
                     try:
                         arguments = (
                             json.loads(raw_arguments)
                             if isinstance(raw_arguments, str)
                             else dict(raw_arguments)
                         )
+                        
+                        if tool_name == "get_danmaku_window":
+                            highlight_id = str(arguments.get("highlight_id","")).strip()
+                            if highlight_id not in retrieved_highlights:
+                                raise EventScoutError(
+                                    "get_danmaku_window requires a highlight "
+                                    "retrieved by search_highlights first"
+                                )
+                        
                         result = self.tools.execute(tool_name, arguments)
+                    
+                    except EventScoutError: raise
+                    
                     except Exception as exc:
                         result = {"error": str(exc)}
                     trace.append(
@@ -81,7 +94,7 @@ class EventScout:
                             step=step,
                             action="tool",
                             tool_name=tool_name,
-                            arguments=arguments if "arguments" in locals() else {},
+                            arguments=arguments,
                         )
                     )
                     self._remember_tool_result(
