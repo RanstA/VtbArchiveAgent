@@ -83,45 +83,51 @@ def insert_test_stream(
         INSERT INTO stream_parts (
             stream_id,
             part_id,
+            start_offset_ms,
+            duration_ms,
             video_path,
             danmaku_path,
             xml_path
         )
         VALUES (
-            ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
             stream_id,
             "p0",
+            0,
+            3_133_000,
             None,
             None,
             None,
         ),
     )
-
     connection.execute(
         """
         INSERT INTO stream_parts (
             stream_id,
             part_id,
+            start_offset_ms,
+            duration_ms,
             video_path,
             danmaku_path,
             xml_path
         )
         VALUES (
-            ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
             stream_id,
             "p1",
+            3_133_000,
+            2_846_000,
             None,
             None,
             None,
         ),
     )
-
     connection.commit()
 
 

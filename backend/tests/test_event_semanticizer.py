@@ -3,6 +3,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from app.domain.event import (
+    make_event_id,
+)
 from app.event_pipeline.events import (
     EventCandidate,
 )
@@ -14,16 +17,41 @@ from app.event_pipeline.semanticizer import (
     build_semantic_text,
     build_user_message,
 )
+
+
 def make_candidate() -> EventCandidate:
     return EventCandidate(
         stream_id="stream-1",
-        part_id="part-1",
+        part_id="p1",
         start_ms=1000,
         end_ms=5000,
         peak_ms=3000,
         source_highlight_ids=[
             "highlight-1",
         ],
+    )
+
+
+def make_semanticizer_input(
+    *,
+    danmaku_texts: list[str] | None = None,
+) -> EventSemanticizerInput:
+    return EventSemanticizerInput(
+        candidate=make_candidate(),
+        stream_title="测试直播",
+        danmaku_texts=(
+            danmaku_texts
+            if danmaku_texts is not None
+            else [
+                "哈哈哈哈",
+                "你又死了",
+            ]
+        ),
+        # 假设 p1 在整场直播中
+        # 从 3,133,000 ms 开始。
+        part_start_offset_ms=3_133_000,
+        salience_score=0.8,
+        segmenter_version=("highlight-merge-v1"),
     )
 
 
@@ -40,16 +68,10 @@ def test_build_semantic_text():
         ],
     )
 
-    result = build_semantic_text(
-        draft
-    )
+    result = build_semantic_text(draft)
 
     assert result == (
-        "观众集中讨论猫\n"
-        "弹幕中多次出现猫相关讨论。\n"
-        "猫\n"
-        "宠物\n"
-        "蜜言"
+        "观众集中讨论猫\n" "弹幕中多次出现猫相关讨论。\n" "猫\n" "宠物\n" "蜜言"
     )
 
 
@@ -65,42 +87,29 @@ def test_build_semantic_text_skips_empty_items():
         entities=[],
     )
 
-    result = build_semantic_text(
-        draft
-    )
+    result = build_semantic_text(draft)
 
-    assert result == (
-        "事件标题\n"
-        "事件摘要\n"
-        "猫"
-    )
+    assert result == ("事件标题\n" "事件摘要\n" "猫")
 
 
 def test_build_user_message_contains_evidence():
-    semanticizer_input = (
-        EventSemanticizerInput(
-            candidate=make_candidate(),
-            stream_title="测试直播",
-            danmaku_texts=[
-                "哈哈哈哈",
-                "你又死了",
-            ],
-        )
-    )
+    semanticizer_input = make_semanticizer_input()
 
-    message = build_user_message(
-        semanticizer_input
-    )
+    message = build_user_message(semanticizer_input)
 
-    payload = json.loads(
-        message
-    )
+    payload = json.loads(message)
 
     assert payload["streamTitle"] == "测试直播"
 
+    # EventCandidate 本身仍然保存
+    # Part-local 时间。
     assert payload["event"]["startMs"] == 1000
+
     assert payload["event"]["endMs"] == 5000
+
     assert payload["event"]["peakMs"] == 3000
+
+    assert payload["event"]["partId"] == "p1"
 
     assert payload["danmaku"] == [
         "哈哈哈哈",
@@ -109,15 +118,22 @@ def test_build_user_message_contains_evidence():
 
 
 def test_semanticizer_input_requires_danmaku():
-    with pytest.raises(
-        ValidationError
-    ):
+    with pytest.raises(ValidationError):
+        make_semanticizer_input(danmaku_texts=[])
+
+
+def test_semanticizer_input_rejects_negative_offset():
+    with pytest.raises(ValidationError):
         EventSemanticizerInput(
             candidate=make_candidate(),
             stream_title="测试直播",
-            danmaku_texts=[],
+            danmaku_texts=[
+                "哈哈哈哈",
+            ],
+            part_start_offset_ms=-1,
         )
-        
+
+
 class FakeModel:
     def __init__(self) -> None:
         self.calls = []
@@ -138,8 +154,8 @@ class FakeModel:
         return {
             "content": json.dumps(
                 {
-                    "title": "观众集中讨论猫",
-                    "summary": "弹幕中多次出现猫相关讨论。",
+                    "title": ("观众集中讨论猫"),
+                    "summary": ("弹幕中多次出现" "猫相关讨论。"),
                     "keywords": [
                         "猫",
                         "宠物",
@@ -160,27 +176,46 @@ def test_semanticizer_calls_model_once_and_builds_event():
         model=model,
     )
 
-    semanticizer_input = EventSemanticizerInput(
-        candidate=make_candidate(),
-        stream_title="测试直播",
+    semanticizer_input = make_semanticizer_input(
         danmaku_texts=[
             "猫猫",
             "养猫吗",
             "可爱",
-        ],
+        ]
     )
 
-    event = semanticizer.semanticize(
-        semanticizer_input
-    )
+    event = semanticizer.semanticize(semanticizer_input)
 
     assert len(model.calls) == 1
+
     assert model.calls[0]["tools"] is None
 
     assert event.stream_id == "stream-1"
-    assert event.part_id == "part-1"
+
+    assert event.source_part_ids == [
+        "p1",
+    ]
+
+    # Part-local:
+    # start = 1,000
+    # end = 5,000
+    # peak = 3,000
+    #
+    # p1 offset = 3,133,000
+    #
+    # Stream-global:
+    assert event.start_ms == 3_134_000
+    assert event.end_ms == 3_138_000
+    assert event.anchor_ms == 3_136_000
+
+    assert event.id == make_event_id(
+        stream_id="stream-1",
+        start_ms=3_134_000,
+        end_ms=3_138_000,
+    )
 
     assert event.title == "观众集中讨论猫"
+
     assert event.summary == "弹幕中多次出现猫相关讨论。"
 
     assert event.keywords == [
@@ -193,19 +228,20 @@ def test_semanticizer_calls_model_once_and_builds_event():
     ]
 
     assert event.semantic_text == (
-        "观众集中讨论猫\n"
-        "弹幕中多次出现猫相关讨论。\n"
-        "猫\n"
-        "宠物\n"
-        "蜜言"
+        "观众集中讨论猫\n" "弹幕中多次出现猫相关讨论。\n" "猫\n" "宠物\n" "蜜言"
     )
-
-    assert event.semanticizer_version == "v1"
 
     assert event.source_highlight_ids == [
         "highlight-1",
     ]
-    
+
+    assert event.salience_score == 0.8
+
+    assert event.segmenter_version == "highlight-merge-v1"
+
+    assert event.semanticizer_version == "v1"
+
+
 def test_semanticizer_rejects_invalid_json():
     class InvalidJsonModel:
         def complete(
@@ -214,29 +250,20 @@ def test_semanticizer_rejects_invalid_json():
             messages,
             tools=None,
         ):
-            return {
-                "content": "not valid json"
-            }
+            return {"content": "not valid json"}
 
     semanticizer = EventSemanticizer(
         model=InvalidJsonModel(),
     )
 
-    semanticizer_input = EventSemanticizerInput(
-        candidate=make_candidate(),
-        stream_title="测试直播",
+    semanticizer_input = make_semanticizer_input(
         danmaku_texts=[
             "哈哈哈哈",
-        ],
+        ]
     )
 
     with pytest.raises(
         EventSemanticizerError,
-        match=(
-            "Event Semanticizer response "
-            "is not valid structured JSON"
-        ),
+        match=("Event Semanticizer response " "is not valid structured JSON"),
     ):
-        semanticizer.semanticize(
-            semanticizer_input
-        )
+        semanticizer.semanticize(semanticizer_input)

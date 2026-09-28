@@ -22,8 +22,12 @@ SEMANTICIZER_VERSION = "v1"
 class EventSemanticizerInput(BaseModel):
     """
     Event Semanticizer 的输入。
-    EventCandidate 提供事件结构边界，
-    danmaku_texts 提供当前可用的观众反应证据。
+
+    当前 candidate 仍来自 Highlight Merge，
+    时间为 Part-local。
+
+    part_start_offset_ms 用于转换成
+    Stream-global Event 时间。
     """
 
     candidate: EventCandidate
@@ -32,15 +36,17 @@ class EventSemanticizerInput(BaseModel):
 
     danmaku_texts: list[str] = Field(min_length=1)
 
-    segmenter_version: str = Field(
-        default="highlight-merge-v1",
-        min_length=1,
-    )
+    part_start_offset_ms: int = Field(ge=0)
 
     salience_score: float = Field(
         default=0.0,
         ge=0.0,
         le=1.0,
+    )
+
+    segmenter_version: str = Field(
+        default="highlight-merge-v1",
+        min_length=1,
     )
 
 
@@ -142,28 +148,35 @@ class EventSemanticizer:
 
         candidate = semanticizer_input.candidate
 
+        offset_ms = semanticizer_input.part_start_offset_ms
+
+        start_ms = offset_ms + candidate.start_ms
+
+        end_ms = offset_ms + candidate.end_ms
+
+        anchor_ms = offset_ms + candidate.peak_ms
+
         semantic_text = build_semantic_text(draft)
 
         return Event(
             id=make_event_id(
-                stream_id=(candidate.stream_id),
-                part_id=(candidate.part_id),
-                start_ms=candidate.start_ms,
-                end_ms=candidate.end_ms,
+                stream_id=candidate.stream_id,
+                start_ms=start_ms,
+                end_ms=end_ms,
             ),
-            stream_id=(candidate.stream_id),
-            part_id=(candidate.part_id),
-            start_ms=(candidate.start_ms),
-            end_ms=(candidate.end_ms),
-            anchor_ms=candidate.peak_ms,
-            salience_score=(semanticizer_input.salience_score),
-            segmenter_version=(semanticizer_input.segmenter_version),
+            stream_id=candidate.stream_id,
+            source_part_ids=[candidate.part_id],
+            start_ms=start_ms,
+            end_ms=end_ms,
+            anchor_ms=anchor_ms,
             source_highlight_ids=(candidate.source_highlight_ids),
             title=draft.title.strip(),
             summary=draft.summary.strip(),
             keywords=[item.strip() for item in draft.keywords if item.strip()],
             entities=[item.strip() for item in draft.entities if item.strip()],
-            semantic_text=(semantic_text),
+            semantic_text=semantic_text,
+            salience_score=(semanticizer_input.salience_score),
+            segmenter_version=(semanticizer_input.segmenter_version),
             semanticizer_version=(self.semanticizer_version),
         )
 
