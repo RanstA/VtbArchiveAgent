@@ -29,12 +29,8 @@ class OpenAICompatibleChatClient:
     def complete(
         self,
         *,
-        messages: list[
-            dict[str, Any]
-        ],
-        tools: list[
-            dict[str, Any]
-        ],
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         endpoint = (
             self.base_url
@@ -66,14 +62,12 @@ class OpenAICompatibleChatClient:
             "messages": (
                 messages
             ),
-            "tools": (
-                tools
-            ),
-            "tool_choice": (
-                "auto"
-            ),
             "temperature": 1,
         }
+        
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         try:
             response = httpx.post(
