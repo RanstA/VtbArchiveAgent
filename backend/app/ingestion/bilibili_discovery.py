@@ -10,11 +10,9 @@ from app.ingestion.bilibili_client import (
     VIEW_API,
 )
 
+REPLAY_LIST_API = "https://api.bilibili.com/" "x/series/recArchivesByKeywords"
 
-REPLAY_LIST_API = (
-    "https://api.bilibili.com/"
-    "x/series/recArchivesByKeywords"
-)
+SERIES_ARCHIVES_API = "https://api.bilibili.com/" "x/series/archives"
 
 
 @dataclass(
@@ -68,20 +66,19 @@ def is_replay_title(
         【直播回放】...
         2023年12月20日20点场
 
-    因此暂时只收标题中明确包含
-    “直播回放”的投稿。
+    因此旧的 UP 投稿扫描路径暂时只收
+    标题中明确包含“直播回放”的投稿。
 
-    等 inventory 出来后再人工检查
-    是否存在其他历史命名格式。
+    注意：
+    Series 路径不使用此规则。
+
+    对 Series 来说，合集成员身份本身就是
+    inventory boundary，不再依赖标题关键词。
     """
 
-    normalized_title = (
-        title.strip()
-    )
+    normalized_title = title.strip()
 
-    normalized_keyword = (
-        keyword.strip()
-    )
+    normalized_keyword = keyword.strip()
 
     if not normalized_title:
         return False
@@ -89,15 +86,10 @@ def is_replay_title(
     if not normalized_keyword:
         return False
 
-    return (
-        normalized_keyword
-        in normalized_title
-    )
+    return normalized_keyword in normalized_title
 
 
-class BilibiliDiscoveryClient(
-    BilibiliClient
-):
+class BilibiliDiscoveryClient(BilibiliClient):
     """
     Bilibili 投稿发现层。
 
@@ -106,8 +98,15 @@ class BilibiliDiscoveryClient(
         -> video / parts / danmaku
 
     BilibiliDiscoveryClient:
+
+    路径 1：
         已知一条主播本人 BVID
         -> owner MID
+        -> replay inventory
+
+    路径 2：
+        已知 MID + Series ID
+        -> Series 全部视频
         -> replay inventory
     """
 
@@ -120,41 +119,29 @@ class BilibiliDiscoveryClient(
         BVID 反查 uploader MID。
         """
 
-        bvid = (
-            bvid.strip()
-        )
+        bvid = bvid.strip()
 
         if not bvid:
-            raise ValueError(
-                "bvid cannot be empty"
-            )
+            raise ValueError("bvid cannot be empty")
 
-        query = (
-            urllib.parse.urlencode(
-                {
-                    "bvid": bvid,
-                }
-            )
+        query = urllib.parse.urlencode(
+            {
+                "bvid": bvid,
+            }
         )
 
-        url = (
-            f"{VIEW_API}"
-            f"?{query}"
-        )
+        url = f"{VIEW_API}" f"?{query}"
 
         data = self._request_json(
             url,
-            referer=(
-                "https://www.bilibili.com/"
-                f"video/{bvid}"
-            ),
+            referer=("https://www.bilibili.com/" f"video/{bvid}"),
         )
 
         if data.get("code") != 0:
             raise BilibiliApiError(
                 "Bilibili video API failed: "
                 f"code={data.get('code')}, "
-                f"message="
+                "message="
                 f"{data.get('message')}"
             )
 
@@ -168,9 +155,7 @@ class BilibiliDiscoveryClient(
             {},
         )
 
-        mid = owner.get(
-            "mid"
-        )
+        mid = owner.get("mid")
 
         display_name = str(
             owner.get(
@@ -181,23 +166,17 @@ class BilibiliDiscoveryClient(
 
         if mid is None:
             raise BilibiliApiError(
-                "Bilibili video response "
-                "does not contain owner.mid"
+                "Bilibili video response " "does not contain owner.mid"
             )
 
         if not display_name:
             raise BilibiliApiError(
-                "Bilibili video response "
-                "does not contain owner.name"
+                "Bilibili video response " "does not contain owner.name"
             )
 
-        return (
-            BilibiliUploaderIdentity(
-                mid=int(mid),
-                display_name=(
-                    display_name
-                ),
-            )
+        return BilibiliUploaderIdentity(
+            mid=int(mid),
+            display_name=(display_name),
         )
 
     def list_upload_page(
@@ -217,65 +196,38 @@ class BilibiliDiscoveryClient(
         - 不需要 WBI 签名
         - 不依赖空间页浏览器指纹
         - 更适合当前 Known VTuber inventory
+
+        这是旧的关键词扫描路径。
         """
 
         if mid <= 0:
-            raise ValueError(
-                "mid must be positive"
-            )
+            raise ValueError("mid must be positive")
 
         if page_number < 1:
-            raise ValueError(
-                "page_number must be >= 1"
-            )
+            raise ValueError("page_number must be >= 1")
 
-        if not (
-            1
-            <= page_size
-            <= 100
-        ):
-            raise ValueError(
-                "page_size must be "
-                "between 1 and 100"
-            )
+        if not (1 <= page_size <= 100):
+            raise ValueError("page_size must be " "between 1 and 100")
 
         params = {
             "mid": mid,
-            "keywords": (
-                keyword.strip()
-            ),
+            "keywords": (keyword.strip()),
             "pn": page_number,
             "ps": page_size,
             "orderby": "pubdate",
         }
 
-        query = (
-            urllib.parse.urlencode(
-                params
-            )
-        )
+        query = urllib.parse.urlencode(params)
 
-        url = (
-            f"{REPLAY_LIST_API}"
-            f"?{query}"
-        )
+        url = f"{REPLAY_LIST_API}" f"?{query}"
 
-        last_error: (
-            Exception
-            | None
-        ) = None
+        last_error: Exception | None = None
 
         for attempt in range(3):
             try:
-                data = (
-                    self._request_json(
-                        url,
-                        referer=(
-                            "https://space."
-                            "bilibili.com/"
-                            f"{mid}/video"
-                        ),
-                    )
+                data = self._request_json(
+                    url,
+                    referer=("https://space." "bilibili.com/" f"{mid}/video"),
                 )
 
                 break
@@ -286,16 +238,10 @@ class BilibiliDiscoveryClient(
                 if attempt == 2:
                     raise
 
-                time.sleep(
-                    2.0
-                    * (attempt + 1)
-                )
+                time.sleep(2.0 * (attempt + 1))
 
         else:
-            assert (
-                last_error
-                is not None
-            )
+            assert last_error is not None
 
             raise last_error
 
@@ -304,20 +250,114 @@ class BilibiliDiscoveryClient(
                 "Bilibili replay list "
                 "API failed: "
                 f"code={data.get('code')}, "
-                f"message="
+                "message="
                 f"{data.get('message')}"
             )
 
-        return (
-            self._parse_upload_page(
-                data=data,
-                page_number=(
-                    page_number
-                ),
-                page_size=(
-                    page_size
-                ),
+        return self._parse_upload_page(
+            data=data,
+            page_number=(page_number),
+            page_size=(page_size),
+        )
+
+    def list_series_page(
+        self,
+        *,
+        mid: int,
+        series_id: int,
+        page_number: int,
+        page_size: int = 50,
+        sort: str = "desc",
+    ) -> BilibiliUploadPage:
+        """
+        枚举指定 Bilibili Series 的一页视频。
+
+        Series membership 本身作为
+        replay inventory boundary。
+
+        因此这里不会再使用：
+        - 标题关键词过滤
+        - 时间 cutoff
+
+        sort:
+            desc -> 新到旧
+            asc  -> 旧到新
+        """
+
+        if mid <= 0:
+            raise ValueError("mid must be positive")
+
+        if series_id <= 0:
+            raise ValueError("series_id must be positive")
+
+        if page_number < 1:
+            raise ValueError("page_number must be >= 1")
+
+        if not (1 <= page_size <= 100):
+            raise ValueError("page_size must be " "between 1 and 100")
+
+        if sort not in {
+            "asc",
+            "desc",
+        }:
+            raise ValueError("sort must be " "'asc' or 'desc'")
+
+        params = {
+            "mid": mid,
+            "series_id": series_id,
+            "only_normal": "true",
+            "sort": sort,
+            "pn": page_number,
+            "ps": page_size,
+        }
+
+        query = urllib.parse.urlencode(params)
+
+        url = f"{SERIES_ARCHIVES_API}" f"?{query}"
+
+        last_error: Exception | None = None
+
+        for attempt in range(3):
+            try:
+                data = self._request_json(
+                    url,
+                    referer=(
+                        "https://space."
+                        "bilibili.com/"
+                        f"{mid}/lists/"
+                        f"{series_id}"
+                        "?type=series"
+                    ),
+                )
+
+                break
+
+            except BilibiliApiError as exc:
+                last_error = exc
+
+                if attempt == 2:
+                    raise
+
+                time.sleep(2.0 * (attempt + 1))
+
+        else:
+            assert last_error is not None
+
+            raise last_error
+
+        if data.get("code") != 0:
+            raise BilibiliApiError(
+                "Bilibili series API "
+                "failed: "
+                f"code={data.get('code')}, "
+                "message="
+                f"{data.get('message')}"
             )
+
+        return self._parse_upload_page(
+            data=data,
+            page_number=(page_number),
+            page_size=(page_size),
         )
 
     def _parse_upload_page(
@@ -355,14 +395,9 @@ class BilibiliDiscoveryClient(
             raw_items,
             list,
         ):
-            raise BilibiliApiError(
-                "Invalid Bilibili replay "
-                "list response"
-            )
+            raise BilibiliApiError("Invalid Bilibili replay " "list response")
 
-        items: list[
-            BilibiliUpload
-        ] = []
+        items: list[BilibiliUpload] = []
 
         for item in raw_items:
             bvid = str(
@@ -391,14 +426,10 @@ class BilibiliDiscoveryClient(
                 duration,
                 int,
             ):
-                length = str(
-                    duration
-                )
+                length = str(duration)
 
             else:
-                length = str(
-                    duration or ""
-                )
+                length = str(duration or "")
 
             items.append(
                 BilibiliUpload(
@@ -454,17 +485,11 @@ class BilibiliDiscoveryClient(
             )
         )
 
-        return (
-            BilibiliUploadPage(
-                items=items,
-                total=total,
-                page_number=(
-                    actual_page_number
-                ),
-                page_size=(
-                    actual_page_size
-                ),
-            )
+        return BilibiliUploadPage(
+            items=items,
+            total=total,
+            page_number=(actual_page_number),
+            page_size=(actual_page_size),
         )
 
     def list_recent_replays(
@@ -480,58 +505,37 @@ class BilibiliDiscoveryClient(
         """
         按发布时间倒序枚举近期直播回放。
 
+        这是旧的关键词扫描路径。
+
         一旦当前页已经进入 cutoff 之前，
         就停止继续翻更老页面。
         """
 
         if since_timestamp < 0:
-            raise ValueError(
-                "since_timestamp "
-                "must be >= 0"
-            )
+            raise ValueError("since_timestamp " "must be >= 0")
 
-        if (
-            max_pages is not None
-            and max_pages < 1
-        ):
-            raise ValueError(
-                "max_pages must be >= 1"
-            )
+        if max_pages is not None and max_pages < 1:
+            raise ValueError("max_pages must be >= 1")
 
-        results: list[
-            BilibiliUpload
-        ] = []
+        results: list[BilibiliUpload] = []
 
-        seen_bvids: set[
-            str
-        ] = set()
+        seen_bvids: set[str] = set()
 
         page_number = 1
 
         while True:
-            page = (
-                self.list_upload_page(
-                    mid=mid,
-                    page_number=(
-                        page_number
-                    ),
-                    page_size=(
-                        page_size
-                    ),
-                    keyword=(
-                        keyword
-                    ),
-                )
+            page = self.list_upload_page(
+                mid=mid,
+                page_number=(page_number),
+                page_size=(page_size),
+                keyword=(keyword),
             )
 
             if not page.items:
                 break
 
             for item in page.items:
-                if (
-                    item.created
-                    < since_timestamp
-                ):
+                if item.created < since_timestamp:
                     continue
 
                 if not is_replay_title(
@@ -540,61 +544,117 @@ class BilibiliDiscoveryClient(
                 ):
                     continue
 
-                if (
-                    item.bvid
-                    in seen_bvids
-                ):
+                if item.bvid in seen_bvids:
                     continue
 
-                seen_bvids.add(
-                    item.bvid
-                )
+                seen_bvids.add(item.bvid)
 
-                results.append(
-                    item
-                )
+                results.append(item)
 
-            created_values = [
-                item.created
-                for item
-                in page.items
-                if item.created > 0
-            ]
+            created_values = [item.created for item in page.items if item.created > 0]
 
-            if (
-                created_values
-                and min(
-                    created_values
-                )
-                < since_timestamp
-            ):
+            if created_values and min(created_values) < since_timestamp:
                 break
 
-            if (
-                page_number
-                * page.page_size
-                >= page.total
-            ):
+            if page_number * page.page_size >= page.total:
                 break
 
-            if (
-                max_pages is not None
-                and page_number
-                >= max_pages
-            ):
+            if max_pages is not None and page_number >= max_pages:
                 break
 
             page_number += 1
 
             if page_delay > 0:
-                time.sleep(
-                    page_delay
-                )
+                time.sleep(page_delay)
 
         results.sort(
-            key=lambda item:
-                item.created,
+            key=lambda item: item.created,
             reverse=True,
+        )
+
+        return results
+
+    def list_series_replays(
+        self,
+        *,
+        mid: int,
+        series_id: int,
+        page_size: int = 50,
+        page_delay: float = 1.0,
+        max_pages: int | None = None,
+        sort: str = "desc",
+    ) -> list[BilibiliUpload]:
+        """
+        枚举一个 Series 中的全部视频。
+
+        与 list_recent_replays 不同：
+
+        - 不做标题关键词过滤
+        - 不做时间 cutoff
+        - Series membership 本身就是边界
+        """
+
+        if mid <= 0:
+            raise ValueError("mid must be positive")
+
+        if series_id <= 0:
+            raise ValueError("series_id must be positive")
+
+        if not (1 <= page_size <= 100):
+            raise ValueError("page_size must be " "between 1 and 100")
+
+        if page_delay < 0:
+            raise ValueError("page_delay must be >= 0")
+
+        if max_pages is not None and max_pages < 1:
+            raise ValueError("max_pages must be >= 1")
+
+        if sort not in {
+            "asc",
+            "desc",
+        }:
+            raise ValueError("sort must be " "'asc' or 'desc'")
+
+        results: list[BilibiliUpload] = []
+
+        seen_bvids: set[str] = set()
+
+        page_number = 1
+
+        while True:
+            page = self.list_series_page(
+                mid=mid,
+                series_id=series_id,
+                page_number=(page_number),
+                page_size=(page_size),
+                sort=sort,
+            )
+
+            if not page.items:
+                break
+
+            for item in page.items:
+                if item.bvid in seen_bvids:
+                    continue
+
+                seen_bvids.add(item.bvid)
+
+                results.append(item)
+
+            if page_number * page.page_size >= page.total:
+                break
+
+            if max_pages is not None and page_number >= max_pages:
+                break
+
+            page_number += 1
+
+            if page_delay > 0:
+                time.sleep(page_delay)
+
+        results.sort(
+            key=lambda item: item.created,
+            reverse=(sort == "desc"),
         )
 
         return results

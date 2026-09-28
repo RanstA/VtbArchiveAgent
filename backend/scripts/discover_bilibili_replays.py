@@ -17,12 +17,7 @@ from app.ingestion.bilibili_session import (
     BilibiliSessionStore,
 )
 
-
-CHINA_TZ = timezone(
-    timedelta(
-        hours=8
-    )
-)
+CHINA_TZ = timezone(timedelta(hours=8))
 
 
 def years_ago(
@@ -30,20 +25,11 @@ def years_ago(
     years: int,
 ) -> datetime:
     try:
-        return now.replace(
-            year=(
-                now.year
-                - years
-            )
-        )
+        return now.replace(year=(now.year - years))
 
     except ValueError:
-        # 例如 2 月 29 日。
         return now.replace(
-            year=(
-                now.year
-                - years
-            ),
+            year=(now.year - years),
             day=28,
         )
 
@@ -60,17 +46,12 @@ def build_client(
             False,
         )
 
-    store = (
-        BilibiliSessionStore()
-    )
+    store = BilibiliSessionStore()
 
     session = store.load()
 
     if session is None:
-        if (
-            auth_mode
-            == "authenticated"
-        ):
+        if auth_mode == "authenticated":
             raise RuntimeError(
                 "No cached Bilibili "
                 "session.\n"
@@ -85,13 +66,7 @@ def build_client(
             False,
         )
 
-    client = (
-        BilibiliDiscoveryClient(
-            sessdata=(
-                session.sessdata
-            )
-        )
-    )
+    client = BilibiliDiscoveryClient(sessdata=(session.sessdata))
 
     if client.is_authenticated():
         return (
@@ -101,14 +76,8 @@ def build_client(
 
     store.clear()
 
-    if (
-        auth_mode
-        == "authenticated"
-    ):
-        raise RuntimeError(
-            "Cached Bilibili "
-            "session is no longer valid."
-        )
+    if auth_mode == "authenticated":
+        raise RuntimeError("Cached Bilibili " "session is no longer valid.")
 
     return (
         BilibiliDiscoveryClient(),
@@ -118,64 +87,75 @@ def build_client(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Discover recent Bilibili "
-            "live replay uploads for "
-            "a known VTuber."
-        )
+        description=("Discover Bilibili replay " "inventory for a known VTuber.")
     )
 
     parser.add_argument(
         "--vtuber-id",
         required=True,
-        help=(
-            "内部稳定 VTuber ID，"
-            "例如 aza"
-        ),
+        help=("内部稳定 VTuber ID，" "例如 aza"),
     )
 
     parser.add_argument(
         "--vtuber-name",
         required=True,
-        help=(
-            "显示名称，例如 阿萨Aza"
-        ),
+        help=("显示名称，例如 阿萨Aza"),
+    )
+
+    parser.add_argument(
+        "--mid",
+        type=int,
+        default=None,
+        help=("Bilibili uploader MID。" "Series 模式使用。"),
+    )
+
+    parser.add_argument(
+        "--series-id",
+        type=int,
+        default=None,
+        help=("Bilibili Series ID。" "设置后直接枚举 Series。"),
     )
 
     parser.add_argument(
         "--seed-bvid",
-        required=True,
-        help=(
-            "一条确认属于该 VTuber "
-            "本人账号的 BVID"
-        ),
+        default=None,
+        help=("旧 discovery 模式：" "一条确认属于该 VTuber " "本人账号的 BVID"),
     )
 
     parser.add_argument(
         "--years",
         type=int,
         default=3,
+        help=("旧 discovery 模式：" "扫描最近多少年"),
     )
 
     parser.add_argument(
         "--keyword",
         default="直播回放",
+        help=("旧 discovery 模式：" "标题关键词"),
     )
 
     parser.add_argument(
         "--page-size",
         type=int,
-        default=30,
+        default=50,
     )
 
     parser.add_argument(
         "--max-pages",
         type=int,
         default=None,
-        help=(
-            "调试时最多读取多少页。"
-            "默认不限。"
-        ),
+        help=("调试时最多读取多少页。" "默认不限。"),
+    )
+
+    parser.add_argument(
+        "--sort",
+        choices=[
+            "asc",
+            "desc",
+        ],
+        default="desc",
+        help=("Series 模式排序。" "desc=新到旧，" "asc=旧到新"),
     )
 
     parser.add_argument(
@@ -197,127 +177,60 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.years < 1:
-        parser.error(
-            "--years must be >= 1"
-        )
+        parser.error("--years must be >= 1")
 
-    if not (
-        1
-        <= args.page_size
-        <= 50
-    ):
-        parser.error(
-            "--page-size must be "
-            "between 1 and 50"
-        )
+    if not (1 <= args.page_size <= 100):
+        parser.error("--page-size must be " "between 1 and 100")
 
-    if (
-        args.max_pages is not None
-        and args.max_pages < 1
-    ):
-        parser.error(
-            "--max-pages must be >= 1"
-        )
+    if args.max_pages is not None and args.max_pages < 1:
+        parser.error("--max-pages must be >= 1")
 
-    vtuber_id = (
-        args.vtuber_id
-        .strip()
-    )
+    vtuber_id = args.vtuber_id.strip()
 
-    vtuber_name = (
-        args.vtuber_name
-        .strip()
-    )
-
-    seed_bvid = (
-        args.seed_bvid
-        .strip()
-    )
-
-    keyword = (
-        args.keyword
-        .strip()
-    )
+    vtuber_name = args.vtuber_name.strip()
 
     if not vtuber_id:
-        parser.error(
-            "--vtuber-id "
-            "cannot be empty"
-        )
+        parser.error("--vtuber-id " "cannot be empty")
 
     if not vtuber_name:
-        parser.error(
-            "--vtuber-name "
-            "cannot be empty"
-        )
+        parser.error("--vtuber-name " "cannot be empty")
 
-    if not seed_bvid:
-        parser.error(
-            "--seed-bvid "
-            "cannot be empty"
-        )
+    use_series = args.series_id is not None
 
-    if not keyword:
-        parser.error(
-            "--keyword "
-            "cannot be empty"
-        )
+    if use_series:
+        if args.mid is None or args.mid <= 0:
+            parser.error(
+                "--mid must be provided " "and positive when using " "--series-id"
+            )
+
+        if args.series_id <= 0:
+            parser.error("--series-id must be " "positive")
+
+    else:
+        if args.seed_bvid is None:
+            parser.error("either --series-id " "or --seed-bvid " "must be provided")
+
+        if not (args.seed_bvid.strip()):
+            parser.error("--seed-bvid " "cannot be empty")
 
     output_path = (
         args.output
-        if args.output
-        is not None
-        else (
-            Path(".local")
-            / "discovery"
-            / (
-                f"{vtuber_id}"
-                "_replays.json"
-            )
-        )
+        if args.output is not None
+        else (Path(".local") / "discovery" / (f"{vtuber_id}" "_replays.json"))
     )
 
-    now = datetime.now(
-        CHINA_TZ
-    )
+    now = datetime.now(CHINA_TZ)
 
-    cutoff = years_ago(
-        now,
-        args.years,
-    )
-
-    client, authenticated = (
-        build_client(
-            args.auth_mode
-        )
-    )
+    client, authenticated = build_client(args.auth_mode)
 
     print()
     print("=" * 70)
-    print(
-        "Bilibili Replay Inventory"
-    )
+    print("Bilibili Replay Inventory")
     print("=" * 70)
 
     print(
         "VTuber:",
-        f"{vtuber_name} "
-        f"({vtuber_id})",
-    )
-
-    print(
-        "Seed BVID:",
-        seed_bvid,
-    )
-
-    print(
-        "Keyword:",
-        keyword,
-    )
-
-    print(
-        "Cutoff:",
-        cutoff.isoformat(),
+        f"{vtuber_name} " f"({vtuber_id})",
     )
 
     print(
@@ -325,48 +238,132 @@ def main() -> None:
         authenticated,
     )
 
-    print()
-    print(
-        "Resolving uploader..."
-    )
+    if use_series:
+        assert args.mid is not None
 
-    uploader = (
-        client
-        .resolve_uploader_from_bvid(
-            seed_bvid
+        assert args.series_id is not None
+
+        print(
+            "Discovery Mode:",
+            "series",
         )
-    )
 
-    print(
-        "Uploader:",
-        uploader.display_name,
-    )
+        print(
+            "MID:",
+            args.mid,
+        )
 
-    print(
-        "MID:",
-        uploader.mid,
-    )
+        print(
+            "Series ID:",
+            args.series_id,
+        )
 
-    print()
-    print(
-        "Scanning uploads..."
-    )
+        print(
+            "Sort:",
+            args.sort,
+        )
 
-    replays = (
-        client.list_recent_replays(
+        print()
+        print("Scanning Series...")
+
+        replays = client.list_series_replays(
+            mid=args.mid,
+            series_id=(args.series_id),
+            page_size=(args.page_size),
+            max_pages=(args.max_pages),
+            sort=args.sort,
+        )
+
+        source_mid = args.mid
+
+        source_display_name = vtuber_name
+
+        query_payload = {
+            "mode": "series",
+            "mid": (args.mid),
+            "series_id": (args.series_id),
+            "sort": (args.sort),
+        }
+
+        source_extra = {
+            "series_id": (args.series_id),
+        }
+
+    else:
+        assert args.seed_bvid is not None
+
+        seed_bvid = args.seed_bvid.strip()
+
+        keyword = args.keyword.strip()
+
+        if not keyword:
+            parser.error("--keyword " "cannot be empty")
+
+        cutoff = years_ago(
+            now,
+            args.years,
+        )
+
+        print(
+            "Discovery Mode:",
+            "uploader_keyword",
+        )
+
+        print(
+            "Seed BVID:",
+            seed_bvid,
+        )
+
+        print(
+            "Keyword:",
+            keyword,
+        )
+
+        print(
+            "Cutoff:",
+            cutoff.isoformat(),
+        )
+
+        print()
+        print("Resolving uploader...")
+
+        uploader = client.resolve_uploader_from_bvid(seed_bvid)
+
+        print(
+            "Uploader:",
+            uploader.display_name,
+        )
+
+        print(
+            "MID:",
+            uploader.mid,
+        )
+
+        print()
+        print("Scanning uploads...")
+
+        replays = client.list_recent_replays(
             mid=uploader.mid,
-            since_timestamp=int(
-                cutoff.timestamp()
-            ),
+            since_timestamp=int(cutoff.timestamp()),
             keyword=keyword,
-            page_size=(
-                args.page_size
-            ),
-            max_pages=(
-                args.max_pages
-            ),
+            page_size=(args.page_size),
+            max_pages=(args.max_pages),
         )
-    )
+
+        source_mid = uploader.mid
+
+        source_display_name = uploader.display_name
+
+        query_payload = {
+            "mode": ("uploader_keyword"),
+            "years": (args.years),
+            "cutoff": (cutoff.isoformat()),
+            "keyword": (keyword),
+        }
+
+        source_extra = {
+            "seed_bvid": (seed_bvid),
+        }
 
     candidate_payload = []
 
@@ -376,68 +373,38 @@ def main() -> None:
                 replay.created,
                 tz=CHINA_TZ,
             )
+            if replay.created > 0
+            else None
         )
 
         candidate_payload.append(
             {
-                **asdict(
-                    replay
-                ),
+                **asdict(replay),
                 "published_at": (
-                    published_at
-                    .isoformat()
+                    published_at.isoformat() if published_at is not None else None
                 ),
-                "video_url": (
-                    "https://www.bilibili.com/"
-                    f"video/{replay.bvid}"
-                ),
+                "video_url": ("https://www.bilibili.com/" f"video/{replay.bvid}"),
             }
         )
 
     payload = {
-        "generated_at": (
-            now.isoformat()
-        ),
+        "generated_at": (now.isoformat()),
         "vtuber": {
-            "id": vtuber_id,
-            "display_name": (
-                vtuber_name
-            ),
+            "id": (vtuber_id),
+            "display_name": (vtuber_name),
         },
         "source": {
             "type": "bilibili",
-            "external_id": str(
-                uploader.mid
-            ),
-            "display_name": (
-                uploader.display_name
-            ),
-            "seed_bvid": (
-                seed_bvid
-            ),
+            "external_id": str(source_mid),
+            "display_name": (source_display_name),
+            **source_extra,
         },
-        "query": {
-            "years": (
-                args.years
-            ),
-            "cutoff": (
-                cutoff.isoformat()
-            ),
-            "keyword": (
-                keyword
-            ),
-        },
-        "authenticated": (
-            authenticated
-        ),
+        "query": (query_payload),
+        "authenticated": (authenticated),
         "summary": {
-            "replay_count": (
-                len(replays)
-            ),
+            "replay_count": (len(replays)),
         },
-        "replays": (
-            candidate_payload
-        ),
+        "replays": (candidate_payload),
     }
 
     output_path.parent.mkdir(
@@ -464,30 +431,26 @@ def main() -> None:
 
     print()
 
-    for replay in replays[
-        :10
-    ]:
-        published_at = (
-            datetime.fromtimestamp(
+    for replay in replays[:10]:
+        if replay.created > 0:
+            published_at = datetime.fromtimestamp(
                 replay.created,
                 tz=CHINA_TZ,
             )
-        )
+
+            date_text = published_at.strftime("%Y-%m-%d")
+
+        else:
+            date_text = "unknown-date"
 
         print(
-            published_at.strftime(
-                "%Y-%m-%d"
-            ),
+            date_text,
             replay.bvid,
             replay.title,
         )
 
     if len(replays) > 10:
-        print(
-            f"... and "
-            f"{len(replays) - 10} "
-            f"more"
-        )
+        print(f"... and " f"{len(replays) - 10} " f"more")
 
     print()
 

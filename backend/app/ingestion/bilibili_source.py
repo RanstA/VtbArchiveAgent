@@ -1,18 +1,23 @@
 import re
-import uuid
 from datetime import (
     datetime,
     timedelta,
     timezone,
 )
 from typing import Literal
-from app.domain.vtuber import (
-    VtuberSource,
-    Vtuber,
-)
+
 from app.domain.danmaku import Danmaku
-from app.domain.stream import Stream, make_stream_id
-from app.domain.stream_part import StreamPart
+from app.domain.stream import (
+    Stream,
+    make_stream_id,
+)
+from app.domain.stream_part import (
+    StreamPart,
+)
+from app.domain.vtuber import (
+    Vtuber,
+    VtuberSource,
+)
 from app.ingestion.bilibili_client import (
     BilibiliClient,
     BilibiliVideoInfo,
@@ -56,7 +61,6 @@ class BilibiliAuthenticationError(
 def _timestamp_to_china_datetime(
     timestamp: int,
 ) -> datetime:
-
     return (
         datetime.fromtimestamp(
             timestamp,
@@ -153,8 +157,8 @@ class BilibiliSource:
                 "Invalid auth_mode: "
                 f"{auth_mode}"
             )
-            
-        self.vtuber= vtuber
+
+        self.vtuber = vtuber
 
         self.auth_mode = (
             auth_mode
@@ -281,15 +285,19 @@ class BilibiliSource:
 
         stream_id = (
             make_stream_id(
-                vtuber_id=self.vtuber.id,
-                live_time = live_time,
-                title = video.title,
+                vtuber_id=(
+                    self.vtuber.id
+                ),
+                live_time=live_time,
+                title=video.title,
             )
         )
 
         stream = Stream(
             id=stream_id,
-            vtuber_id=self.vtuber.id,
+            vtuber_id=(
+                self.vtuber.id
+            ),
             month=(
                 live_time.strftime(
                     "%Y-%m"
@@ -317,15 +325,68 @@ class BilibiliSource:
             Danmaku
         ] = []
 
-        for remote_part in video.parts:
+        # Bilibili 返回的弹幕时间仍然是
+        # Part-local。
+        #
+        # StreamPart.start_offset_ms
+        # 负责描述该 Part 在整场 Stream
+        # 中的起点。
+        #
+        # 后续构造 Unified Event 时：
+        #
+        # stream_global_ms
+        #   = start_offset_ms
+        #   + part_local_ms
+        start_offset_ms = 0
+
+        ordered_parts = sorted(
+            video.parts,
+            key=lambda item:
+                item.page_index,
+        )
+
+        for index, remote_part in enumerate(
+            ordered_parts
+        ):
             part_id = (
                 f"p"
                 f"{remote_part.page_index}"
             )
 
+            duration_ms = (
+                remote_part.duration_seconds
+                * 1000
+                if (
+                    remote_part.duration_seconds
+                    > 0
+                )
+                else None
+            )
+
+            # 如果当前不是最后一个 Part，
+            # 就必须知道它的 duration，
+            # 否则无法计算后续 Part 的
+            # Stream-global offset。
+            if (
+                duration_ms is None
+                and index
+                < len(ordered_parts) - 1
+            ):
+                raise RuntimeError(
+                    "Cannot calculate "
+                    "stream-global offsets: "
+                    f"{part_id} has no duration"
+                )
+
             part = StreamPart(
                 stream_id=stream_id,
                 part_id=part_id,
+                start_offset_ms=(
+                    start_offset_ms
+                ),
+                duration_ms=(
+                    duration_ms
+                ),
                 video_path=None,
                 danmaku_path=None,
                 xml_path=None,
@@ -335,6 +396,10 @@ class BilibiliSource:
                 part
             )
 
+            # 注意：
+            # 即使最后一个 Part 的
+            # duration 未知，
+            # 仍然应该读取它的弹幕。
             remote_danmaku = (
                 client.get_part_danmaku(
                     video=video,
@@ -360,6 +425,15 @@ class BilibiliSource:
                         ),
                     )
                 )
+
+            # 当前 Part 完成后，
+            # 为下一个 Part 推进
+            # Stream-global offset。
+            if duration_ms is not None:
+                start_offset_ms += (
+                    duration_ms
+                )
+
         vtuber_source = (
             VtuberSource(
                 vtuber_id=(
@@ -376,14 +450,22 @@ class BilibiliSource:
         return ArchiveBundle(
             source="bilibili",
             vtuber=self.vtuber,
-            vtuber_sources=[vtuber_source],
+            vtuber_sources=[
+                vtuber_source
+            ],
             stream=stream,
             parts=parts,
             danmaku=danmaku,
             source_metadata={
-                "bvid": video.bvid,
-                "aid": video.aid,
-                "owner": video.owner,
+                "bvid": (
+                    video.bvid
+                ),
+                "aid": (
+                    video.aid
+                ),
+                "owner": (
+                    video.owner
+                ),
                 "authenticated": (
                     authenticated
                 ),
