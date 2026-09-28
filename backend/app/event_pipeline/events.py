@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from app.domain.highlight import Highlight
 
 
-DEFAULT_MERGE_GAP_MS = 10_000
+DEFAULT_MERGE_GAP_MS = 20_000
 DEFAULT_MAX_EVENT_DURATION_MS = 120_000
 
 

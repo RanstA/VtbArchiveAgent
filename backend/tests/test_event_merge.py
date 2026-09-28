@@ -68,9 +68,9 @@ def test_nearby_highlights_are_merged():
             peak_ms=15_000,
         ),
         make_highlight(
-            start_ms=40_000,
-            end_ms=70_000,
-            peak_ms=55_000,
+            start_ms=50_000,
+            end_ms=80_000,
+            peak_ms=65_000,
         ),
     ]
 
@@ -87,9 +87,9 @@ def test_distant_highlights_are_not_merged():
             peak_ms=15_000,
         ),
         make_highlight(
-            start_ms=50_000,
-            end_ms=80_000,
-            peak_ms=65_000,
+            start_ms=51_000,
+            end_ms=81_000,
+            peak_ms=66_000,
         ),
     ]
 
