@@ -3,6 +3,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from app.ingestion.media_probe import probe_duration_ms
+
 from app.domain.vtuber import (
     Vtuber,
     VtuberSource,
@@ -31,9 +33,7 @@ MEDIA_SUFFIXES = {
     ".xml",
 }
 
-WINDOWS_FORBIDDEN = re.compile(
-    r'[<>:"/\\|?*]'
-)
+WINDOWS_FORBIDDEN = re.compile(r'[<>:"/\\|?*]')
 
 
 def normalize_match_key(
@@ -62,10 +62,8 @@ def expected_month_directory(
     """
     根据直播时间得到旧归档结构中的月份目录
     """
-    return (
-        f"{stream.live_time.year}年"
-        f"{stream.live_time.month}月录播"
-    )
+    return f"{stream.live_time.year}年" f"{stream.live_time.month}月录播"
+
 
 def build_directory_index(
     archive_root: Path,
@@ -78,23 +76,16 @@ def build_directory_index(
         list[Path],
     ] = {}
 
-    for root, dirs, _ in os.walk(
-        archive_root
-    ):
+    for root, dirs, _ in os.walk(archive_root):
         root_path = Path(root)
 
         for directory_name in dirs:
-            directory_path = (
-                root_path
-                / directory_name
-            )
+            directory_path = root_path / directory_name
 
             index.setdefault(
                 directory_name,
                 [],
-            ).append(
-                directory_path
-            )
+            ).append(directory_path)
 
     return index
 
@@ -103,120 +94,60 @@ def resolve_nested_stream_directory(
     stream: Stream,
     archive_root: Path,
 ) -> Path | None:
-    directory_index = (
-        build_directory_index(
-            archive_root
-        )
+    directory_index = build_directory_index(archive_root)
+
+    expected_month = expected_month_directory(stream)
+
+    exact_candidates = directory_index.get(
+        stream.title,
+        [],
     )
 
-    expected_month = (
-        expected_month_directory(
-            stream
-        )
-    )
-
-    exact_candidates = (
-        directory_index.get(
-            stream.title,
-            [],
-        )
-    )
-
-    if len(
-        exact_candidates
-    ) == 1:
+    if len(exact_candidates) == 1:
         return exact_candidates[0]
 
-    if len(
-        exact_candidates
-    ) > 1:
+    if len(exact_candidates) > 1:
         month_candidates = [
-            path
-            for path
-            in exact_candidates
-            if (
-                path.parent.name
-                == expected_month
-            )
+            path for path in exact_candidates if (path.parent.name == expected_month)
         ]
 
-        if len(
-            month_candidates
-        ) == 1:
+        if len(month_candidates) == 1:
             return month_candidates[0]
 
-        if len(
-            month_candidates
-        ) > 1:
+        if len(month_candidates) > 1:
             raise RuntimeError(
                 "正确月份内仍存在多个"
-                "同名录播目录: "
-                + " | ".join(
-                    str(path)
-                    for path
-                    in month_candidates
-                )
+                "同名录播目录: " + " | ".join(str(path) for path in month_candidates)
             )
 
         raise RuntimeError(
             "找到多个同名录播目录，"
             "但没有唯一正确月份目录: "
-            + " | ".join(
-                str(path)
-                for path
-                in exact_candidates
-            )
+            + " | ".join(str(path) for path in exact_candidates)
         )
 
-    normalized_title = (
-        normalize_match_key(
-            stream.title
-        )
-    )
+    normalized_title = normalize_match_key(stream.title)
 
-    normalized_candidates: list[
-        Path
-    ] = []
+    normalized_candidates: list[Path] = []
 
     for (
         directory_name,
         paths,
     ) in directory_index.items():
-        if (
-            normalize_match_key(
-                directory_name
-            )
-            != normalized_title
-        ):
+        if normalize_match_key(directory_name) != normalized_title:
             continue
 
         for path in paths:
-            if (
-                path.parent.name
-                == expected_month
-            ):
-                normalized_candidates.append(
-                    path
-                )
+            if path.parent.name == expected_month:
+                normalized_candidates.append(path)
 
-    if len(
-        normalized_candidates
-    ) == 1:
-        return (
-            normalized_candidates[0]
-        )
+    if len(normalized_candidates) == 1:
+        return normalized_candidates[0]
 
-    if len(
-        normalized_candidates
-    ) > 1:
+    if len(normalized_candidates) > 1:
         raise RuntimeError(
             "文件名归一化后仍匹配到"
-            "多个录播目录: "
-            + " | ".join(
-                str(path)
-                for path
-                in normalized_candidates
-            )
+            "多个录播目录: " + " | ".join(str(path) for path in normalized_candidates)
         )
 
     return None
@@ -231,9 +162,7 @@ def _group_media_files(
     ] = {}
 
     for path in paths:
-        suffix = (
-            path.suffix.lower()
-        )
+        suffix = path.suffix.lower()
 
         if suffix not in MEDIA_SUFFIXES:
             continue
@@ -245,67 +174,48 @@ def _group_media_files(
             {},
         )
 
-        groups[stem][suffix] = (
-            path
-        )
+        groups[stem][suffix] = path
 
     return [
         groups[stem]
         for stem in sorted(
             groups,
-            key=lambda item: (
-                normalize_match_key(
-                    item
-                )
-            ),
+            key=lambda item: (normalize_match_key(item)),
         )
     ]
+
 
 def _scan_nested_parts(
     directory: Path,
-) -> list[
-    dict[str, Path]
-]:
+) -> list[dict[str, Path]]:
     paths = [
-        path for path in directory.iterdir()
-        if (
-            path.is_file()
-            and path.suffix.lower()
-            in MEDIA_SUFFIXES
-        )
+        path
+        for path in directory.iterdir()
+        if (path.is_file() and path.suffix.lower() in MEDIA_SUFFIXES)
     ]
 
     return _group_media_files(paths)
+
 
 def _flat_file_matches_stream(
     path: Path,
     stream: Stream,
 ) -> bool:
-    title_key = normalize_match_key(
-        stream.title
-    )
-    stem_key = normalize_match_key(
-        path.stem
-    )
-    return (
-        stem_key == title_key
-        or stem_key.startswith(
-            title_key + "_"
-        )
-    )
+    title_key = normalize_match_key(stream.title)
+    stem_key = normalize_match_key(path.stem)
+    return stem_key == title_key or stem_key.startswith(title_key + "_")
+
 
 def _scan_flat_parts(
     archive_root: Path,
     stream: Stream,
-) -> list[
-    dict[str, Path]
-]:
+) -> list[dict[str, Path]]:
     paths = [
-        path for path in archive_root.iterdir()
+        path
+        for path in archive_root.iterdir()
         if (
             path.is_file()
-            and path.suffix.lower()
-            in MEDIA_SUFFIXES
+            and path.suffix.lower() in MEDIA_SUFFIXES
             and _flat_file_matches_stream(
                 path,
                 stream,
@@ -315,56 +225,57 @@ def _scan_flat_parts(
 
     return _group_media_files(paths)
 
+
 def _build_stream_parts(
     stream: Stream,
-    file_groups: list[
-        dict[str, Path]
-    ],
+    file_groups: list[dict[str, Path]],
 ) -> list[StreamPart]:
-    parts: list[
-        StreamPart
-    ] = []
+    parts: list[StreamPart] = []
 
-    for index, files in enumerate(
-        file_groups
-    ):
+    start_offset_ms = 0
+
+    for index, files in enumerate(file_groups):
         part_id = f"p{index}"
 
-        video_path = (
-            files.get(".mp4")
-            or files.get(".mkv")
-            or files.get(".flv")
-        )
+        video_path = files.get(".mp4") or files.get(".mkv") or files.get(".flv")
 
-        danmaku_path = (
-            files.get(".ass")
-        )
+        danmaku_path = files.get(".ass")
 
-        xml_path = (
-            files.get(".xml")
-        )
+        xml_path = files.get(".xml")
+
+        duration_ms: int | None = None
+
+        if video_path is not None:
+            duration_ms = probe_duration_ms(video_path)
 
         parts.append(
             StreamPart(
                 stream_id=stream.id,
                 part_id=part_id,
-                video_path=(
-                    str(video_path)
-                    if video_path
-                    else None
-                ),
-                danmaku_path=(
-                    str(danmaku_path)
-                    if danmaku_path
-                    else None
-                ),
-                xml_path=(
-                    str(xml_path)
-                    if xml_path
-                    else None
-                ),
+                start_offset_ms=(start_offset_ms),
+                duration_ms=(duration_ms),
+                video_path=(str(video_path) if video_path else None),
+                danmaku_path=(str(danmaku_path) if danmaku_path else None),
+                xml_path=(str(xml_path) if xml_path else None),
             )
         )
+
+        # 如果后面还有 Part，
+        # 当前 Part 的时长必须已知，
+        # 否则无法计算下一个 Part
+        # 在整场 Stream 中的真实 offset。
+        has_next_part = index < len(file_groups) - 1
+
+        if has_next_part and duration_ms is None:
+            raise RuntimeError(
+                "Cannot calculate stream-global "
+                "offset because media duration "
+                "is unavailable for "
+                f"{stream.id}/{part_id}"
+            )
+
+        if duration_ms is not None:
+            start_offset_ms += duration_ms
 
     return parts
 
@@ -399,25 +310,14 @@ class LocalSource:
             "nested",
             "flat",
         }:
-            raise ValueError(
-                "layout must be one of: "
-                "auto, nested, flat"
-            )
-        
-        if (
-            stream.vtuber_id
-            != vtuber.id
-        ):
-            raise ValueError(
-                "stream.vtuber_id "
-                "must match vtuber.id"
-            )
+            raise ValueError("layout must be one of: " "auto, nested, flat")
+
+        if stream.vtuber_id != vtuber.id:
+            raise ValueError("stream.vtuber_id " "must match vtuber.id")
 
         self.stream = stream
         self.vtuber = vtuber
-        self.archive_root = Path(
-            archive_root
-        )
+        self.archive_root = Path(archive_root)
         self.layout = layout
 
     def _resolve_file_groups(
@@ -429,40 +329,25 @@ class LocalSource:
     ]:
         if not self.archive_root.exists():
             raise FileNotFoundError(
-                "Archive root does not exist: "
-                f"{self.archive_root}"
+                "Archive root does not exist: " f"{self.archive_root}"
             )
 
-        if (
-            not self.archive_root.is_dir()
-        ):
+        if not self.archive_root.is_dir():
             raise NotADirectoryError(
-                "Archive root is not a directory: "
-                f"{self.archive_root}"
+                "Archive root is not a directory: " f"{self.archive_root}"
             )
 
         if self.layout in {
             "auto",
             "nested",
         }:
-            nested_directory = (
-                resolve_nested_stream_directory(
-                    stream=self.stream,
-                    archive_root=(
-                        self.archive_root
-                    ),
-                )
+            nested_directory = resolve_nested_stream_directory(
+                stream=self.stream,
+                archive_root=(self.archive_root),
             )
 
-            if (
-                nested_directory
-                is not None
-            ):
-                groups = (
-                    _scan_nested_parts(
-                        nested_directory
-                    )
-                )
+            if nested_directory is not None:
+                groups = _scan_nested_parts(nested_directory)
 
                 return (
                     "nested",
@@ -470,10 +355,7 @@ class LocalSource:
                     groups,
                 )
 
-            if (
-                self.layout
-                == "nested"
-            ):
+            if self.layout == "nested":
                 return (
                     "metadata_only",
                     None,
@@ -484,13 +366,9 @@ class LocalSource:
             "auto",
             "flat",
         }:
-            groups = (
-                _scan_flat_parts(
-                    archive_root=(
-                        self.archive_root
-                    ),
-                    stream=self.stream,
-                )
+            groups = _scan_flat_parts(
+                archive_root=(self.archive_root),
+                stream=self.stream,
             )
 
             if groups:
@@ -513,39 +391,24 @@ class LocalSource:
             resolved_layout,
             matched_path,
             file_groups,
-        ) = (
-            self._resolve_file_groups()
+        ) = self._resolve_file_groups()
+
+        parts = _build_stream_parts(
+            stream=self.stream,
+            file_groups=file_groups,
         )
 
-        parts = (
-            _build_stream_parts(
-                stream=self.stream,
-                file_groups=file_groups,
-            )
-        )
-
-        danmaku: list[
-            Danmaku
-        ] = []
+        danmaku: list[Danmaku] = []
 
         for part in parts:
-            if (
-                part.danmaku_path
-                is None
-            ):
+            if part.danmaku_path is None:
                 continue
 
             danmaku.extend(
                 parse_ass(
-                    path=Path(
-                        part.danmaku_path
-                    ),
-                    stream_id=(
-                        self.stream.id
-                    ),
-                    part_id=(
-                        part.part_id
-                    ),
+                    path=Path(part.danmaku_path),
+                    stream_id=(self.stream.id),
+                    part_id=(part.part_id),
                 )
             )
 
@@ -559,30 +422,17 @@ class LocalSource:
         return ArchiveBundle(
             source="local",
             vtuber=self.vtuber,
-            vtuber_sources=[
-                vtuber_source
-            ],
+            vtuber_sources=[vtuber_source],
             stream=self.stream,
             parts=parts,
             danmaku=danmaku,
             source_metadata={
-                "layout": (
-                    resolved_layout
-                ),
-                "archive_root": str(
-                    self.archive_root
-                ),
+                "layout": (resolved_layout),
+                "archive_root": str(self.archive_root),
                 "matched_path": (
-                    str(matched_path)
-                    if matched_path
-                    is not None
-                    else None
+                    str(matched_path) if matched_path is not None else None
                 ),
-                "part_count": len(
-                    parts
-                ),
-                "danmaku_count": len(
-                    danmaku
-                ),
+                "part_count": len(parts),
+                "danmaku_count": len(danmaku),
             },
         )

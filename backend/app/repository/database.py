@@ -54,11 +54,11 @@ def _assert_schema_compatible(
 ) -> None:
     """
     当前项目仍处于开发阶段，
-    暂时不对旧单主播数据库做自动迁移。
+    暂时不对旧数据库做自动迁移。
 
-    如果检测到旧 streams 表缺少 vtuber_id，
-    明确拒绝继续初始化，避免把旧数据
-    静默绑定到错误的 VTuber。
+    如果检测到旧 schema，
+    明确拒绝继续初始化，
+    避免产生语义错误的数据。
     """
 
     if not _table_exists(
@@ -67,12 +67,12 @@ def _assert_schema_compatible(
     ):
         return
 
-    columns = _table_columns(
+    stream_columns = _table_columns(
         connection,
         "streams",
     )
 
-    if "vtuber_id" not in columns:
+    if "vtuber_id" not in stream_columns:
         raise RuntimeError(
             "Legacy database schema detected: "
             "streams.vtuber_id is missing. "
@@ -80,6 +80,41 @@ def _assert_schema_compatible(
             "database and re-import the archive."
         )
 
+    if not _table_exists(
+        connection,
+        "stream_parts",
+    ):
+        return
+
+    part_columns = _table_columns(
+        connection,
+        "stream_parts",
+    )
+
+    required_part_columns = {
+        "start_offset_ms",
+        "duration_ms",
+    }
+
+    missing_part_columns = (
+        required_part_columns
+        - part_columns
+    )
+
+    if missing_part_columns:
+        missing_text = ", ".join(
+            sorted(
+                missing_part_columns
+            )
+        )
+
+        raise RuntimeError(
+            "Legacy database schema detected: "
+            "stream_parts is missing "
+            f"{missing_text}. "
+            "Back up or remove the old development "
+            "database and re-import the archive."
+        )
 
 def init_db(
     connection: sqlite3.Connection,
@@ -168,9 +203,21 @@ def init_db(
             stream_id TEXT NOT NULL,
             part_id TEXT NOT NULL,
 
+            start_offset_ms INTEGER NOT NULL,
+            duration_ms INTEGER,
+
             video_path TEXT,
             danmaku_path TEXT,
             xml_path TEXT,
+
+            CHECK (
+                start_offset_ms >= 0
+            ),
+
+            CHECK (
+                duration_ms IS NULL
+                OR duration_ms > 0
+            ),
 
             FOREIGN KEY (
                 stream_id

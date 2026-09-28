@@ -32,6 +32,17 @@ class EventSemanticizerInput(BaseModel):
 
     danmaku_texts: list[str] = Field(min_length=1)
 
+    segmenter_version: str = Field(
+        default="highlight-merge-v1",
+        min_length=1,
+    )
+
+    salience_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+    )
+
 
 class EventSemanticizerDraft(BaseModel):
     """
@@ -87,6 +98,7 @@ def build_user_message(
 class EventSemanticizerError(RuntimeError):
     pass
 
+
 class EventSemanticizer:
     def __init__(
         self,
@@ -94,19 +106,13 @@ class EventSemanticizer:
         model: OpenAICompatibleChatClient,
         semanticizer_version: str = SEMANTICIZER_VERSION,
     ) -> None:
-        semanticizer_version = (
-            semanticizer_version.strip()
-        )
+        semanticizer_version = semanticizer_version.strip()
 
         if not semanticizer_version:
-            raise ValueError(
-                "semanticizer_version cannot be empty"
-            )
+            raise ValueError("semanticizer_version cannot be empty")
 
         self.model = model
-        self.semanticizer_version = (
-            semanticizer_version
-        )
+        self.semanticizer_version = semanticizer_version
 
     def semanticize(
         self,
@@ -115,21 +121,15 @@ class EventSemanticizer:
         messages = [
             {
                 "role": "system",
-                "content": load_prompt(
-                    "event_semanticizer"
-                ),
+                "content": load_prompt("event_semanticizer"),
             },
             {
                 "role": "user",
-                "content": build_user_message(
-                    semanticizer_input
-                ),
+                "content": build_user_message(semanticizer_input),
             },
         ]
 
-        message = self.model.complete(
-            messages=messages
-        )
+        message = self.model.complete(messages=messages)
 
         content = str(
             message.get(
@@ -138,70 +138,33 @@ class EventSemanticizer:
             )
         ).strip()
 
-        draft = self._parse_draft(
-            content
-        )
+        draft = self._parse_draft(content)
 
-        candidate = (
-            semanticizer_input.candidate
-        )
+        candidate = semanticizer_input.candidate
 
-        semantic_text = (
-            build_semantic_text(
-                draft
-            )
-        )
+        semantic_text = build_semantic_text(draft)
 
         return Event(
             id=make_event_id(
-                stream_id=(
-                    candidate.stream_id
-                ),
-                part_id=(
-                    candidate.part_id
-                ),
-                source_highlight_ids=(
-                    candidate
-                    .source_highlight_ids
-                ),
+                stream_id=(candidate.stream_id),
+                part_id=(candidate.part_id),
+                start_ms=candidate.start_ms,
+                end_ms=candidate.end_ms,
             ),
-            stream_id=(
-                candidate.stream_id
-            ),
-            part_id=(
-                candidate.part_id
-            ),
-            start_ms=(
-                candidate.start_ms
-            ),
-            end_ms=(
-                candidate.end_ms
-            ),
-            peak_ms=(
-                candidate.peak_ms
-            ),
-            source_highlight_ids=(
-                candidate
-                .source_highlight_ids
-            ),
+            stream_id=(candidate.stream_id),
+            part_id=(candidate.part_id),
+            start_ms=(candidate.start_ms),
+            end_ms=(candidate.end_ms),
+            anchor_ms=candidate.peak_ms,
+            salience_score=(semanticizer_input.salience_score),
+            segmenter_version=(semanticizer_input.segmenter_version),
+            source_highlight_ids=(candidate.source_highlight_ids),
             title=draft.title.strip(),
             summary=draft.summary.strip(),
-            keywords=[
-                item.strip()
-                for item in draft.keywords
-                if item.strip()
-            ],
-            entities=[
-                item.strip()
-                for item in draft.entities
-                if item.strip()
-            ],
-            semantic_text=(
-                semantic_text
-            ),
-            semanticizer_version=(
-                self.semanticizer_version
-            ),
+            keywords=[item.strip() for item in draft.keywords if item.strip()],
+            entities=[item.strip() for item in draft.entities if item.strip()],
+            semantic_text=(semantic_text),
+            semanticizer_version=(self.semanticizer_version),
         )
 
     @staticmethod
@@ -216,35 +179,20 @@ class EventSemanticizer:
             if lines:
                 lines = lines[1:]
 
-            if (
-                lines
-                and lines[-1].strip()
-                == "```"
-            ):
+            if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
 
-            cleaned = "\n".join(
-                lines
-            ).strip()
+            cleaned = "\n".join(lines).strip()
 
         try:
-            payload = json.loads(
-                cleaned
-            )
+            payload = json.loads(cleaned)
 
-            return (
-                EventSemanticizerDraft
-                .model_validate(
-                    payload
-                )
-            )
+            return EventSemanticizerDraft.model_validate(payload)
 
         except (
             json.JSONDecodeError,
             ValidationError,
         ) as exc:
             raise EventSemanticizerError(
-                "Event Semanticizer response "
-                "is not valid structured JSON"
+                "Event Semanticizer response " "is not valid structured JSON"
             ) from exc
-
