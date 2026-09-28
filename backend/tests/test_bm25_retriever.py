@@ -23,10 +23,12 @@ def make_event(
     return Event(
         id=event_id,
         stream_id="stream-1",
-        part_id="part-1",
+        source_part_ids=[
+            "p0",
+        ],
         start_ms=0,
         end_ms=30_000,
-        peak_ms=15_000,
+        anchor_ms=15_000,
         source_highlight_ids=[
             f"highlight-{event_id}",
         ],
@@ -35,6 +37,8 @@ def make_event(
         keywords=keywords,
         entities=[],
         semantic_text=semantic_text,
+        salience_score=0.5,
+        segmenter_version="test-v1",
         semanticizer_version="v1",
     )
 
@@ -89,8 +93,16 @@ def test_bm25_ranks_relevant_event_first():
     )
 
     assert results
-    assert results[0].event.id == "cat"
-    assert results[0].score > 0
+
+    assert (
+        results[0].event.id
+        == "cat"
+    )
+
+    assert (
+        results[0].score
+        > 0
+    )
 
 
 def test_bm25_respects_top_k():
@@ -99,13 +111,17 @@ def test_bm25_respects_top_k():
             event_id="cat-1",
             title="猫",
             summary="讨论猫。",
-            keywords=["猫"],
+            keywords=[
+                "猫",
+            ],
         ),
         make_event(
             event_id="cat-2",
             title="猫咪",
             summary="讨论猫咪。",
-            keywords=["猫"],
+            keywords=[
+                "猫",
+            ],
         ),
     ]
 
@@ -126,11 +142,15 @@ def test_bm25_returns_empty_for_unmatched_query():
         event_id="cat",
         title="观众讨论猫",
         summary="弹幕讨论猫。",
-        keywords=["猫"],
+        keywords=[
+            "猫",
+        ],
     )
 
     retriever = BM25EventRetriever(
-        [event]
+        [
+            event
+        ]
     )
 
     results = retriever.search(

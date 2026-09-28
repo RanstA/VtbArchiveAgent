@@ -92,9 +92,9 @@ def test_local_source_loads_nested_layout(
 
     assert bundle.parts[0].part_id == "p0"
 
-    assert parts[0]["start_offset_ms"] == 0
+    assert bundle.parts[0].start_offset_ms == 0
 
-    assert parts[0]["duration_ms"] is None
+    assert bundle.parts[0].duration_ms is None
 
     assert bundle.parts[0].danmaku_path is not None
 

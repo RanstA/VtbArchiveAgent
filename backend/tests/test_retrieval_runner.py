@@ -23,10 +23,12 @@ def make_event(
     return Event(
         id=event_id,
         stream_id="stream-1",
-        part_id="part-1",
+        source_part_ids=[
+            "p0",
+        ],
         start_ms=0,
         end_ms=30_000,
-        peak_ms=15_000,
+        anchor_ms=15_000,
         source_highlight_ids=[
             f"highlight-{event_id}",
         ],
@@ -35,6 +37,8 @@ def make_event(
         keywords=[],
         entities=[],
         semantic_text=semantic_text,
+        salience_score=0.5,
+        segmenter_version="test-v1",
         semanticizer_version="v1",
     )
 
@@ -42,23 +46,17 @@ def make_event(
 def test_compare_bm25_vector_and_rrf():
     cat = make_event(
         event_id="cat-event",
-        semantic_text=(
-            "观众讨论猫和猫咪"
-        ),
+        semantic_text=("观众讨论猫和猫咪"),
     )
 
     pet = make_event(
         event_id="pet-event",
-        semantic_text=(
-            "观众讨论宠物饲养"
-        ),
+        semantic_text=("观众讨论宠物饲养"),
     )
 
     game = make_event(
         event_id="game-event",
-        semantic_text=(
-            "观众讨论游戏失败"
-        ),
+        semantic_text=("观众讨论游戏失败"),
     )
 
     events = [
@@ -67,26 +65,18 @@ def test_compare_bm25_vector_and_rrf():
         game,
     ]
 
-    bm25_retriever = (
-        BM25EventRetriever(
-            events
-        )
-    )
+    bm25_retriever = BM25EventRetriever(events)
 
-    vector_retriever = (
-        VectorEventRetriever(
-            events=events,
-            embeddings=[
-                # cat-event
-                [0.9, 0.1],
-
-                # pet-event
-                [1.0, 0.0],
-
-                # game-event
-                [0.0, 1.0],
-            ],
-        )
+    vector_retriever = VectorEventRetriever(
+        events=events,
+        embeddings=[
+            # cat-event
+            [0.9, 0.1],
+            # pet-event
+            [1.0, 0.0],
+            # game-event
+            [0.0, 1.0],
+        ],
     )
 
     case = RetrievalEvalCase(
@@ -98,47 +88,21 @@ def test_compare_bm25_vector_and_rrf():
         ],
     )
 
-    comparison = (
-        evaluate_retrievers(
-            case=case,
-            bm25_retriever=(
-                bm25_retriever
-            ),
-            vector_retriever=(
-                vector_retriever
-            ),
-            query_embedding=[
-                1.0,
-                0.0,
-            ],
-            top_k=3,
-        )
+    comparison = evaluate_retrievers(
+        case=case,
+        bm25_retriever=(bm25_retriever),
+        vector_retriever=(vector_retriever),
+        query_embedding=[
+            1.0,
+            0.0,
+        ],
+        top_k=3,
     )
 
-    assert (
-        comparison
-        .bm25
-        .hit_at_1
-        is True
-    )
+    assert comparison.bm25.hit_at_1 is True
 
-    assert (
-        comparison
-        .vector
-        .hit_at_1
-        is True
-    )
+    assert comparison.vector.hit_at_1 is True
 
-    assert (
-        comparison
-        .rrf
-        .hit_at_1
-        is True
-    )
+    assert comparison.rrf.hit_at_1 is True
 
-    assert (
-        comparison
-        .rrf
-        .reciprocal_rank
-        == 1.0
-    )
+    assert comparison.rrf.reciprocal_rank == 1.0

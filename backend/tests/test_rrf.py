@@ -1,9 +1,15 @@
 import pytest
 
 from app.domain.event import Event
-from app.retrieval.bm25 import BM25SearchResult
-from app.retrieval.rrf import rrf_fuse
-from app.retrieval.vector import VectorSearchResult
+from app.retrieval.bm25 import (
+    BM25SearchResult,
+)
+from app.retrieval.rrf import (
+    rrf_fuse,
+)
+from app.retrieval.vector import (
+    VectorSearchResult,
+)
 
 
 def make_event(
@@ -12,10 +18,12 @@ def make_event(
     return Event(
         id=event_id,
         stream_id="stream-1",
-        part_id="part-1",
+        source_part_ids=[
+            "p0",
+        ],
         start_ms=0,
         end_ms=30_000,
-        peak_ms=15_000,
+        anchor_ms=15_000,
         source_highlight_ids=[
             f"highlight-{event_id}",
         ],
@@ -24,14 +32,24 @@ def make_event(
         keywords=[],
         entities=[],
         semantic_text=event_id,
+        salience_score=0.5,
+        segmenter_version="test-v1",
         semanticizer_version="v1",
     )
 
 
 def test_rrf_promotes_event_supported_by_both_retrievers():
-    cat = make_event("cat")
-    game = make_event("game")
-    singing = make_event("singing")
+    cat = make_event(
+        "cat"
+    )
+
+    game = make_event(
+        "game"
+    )
+
+    singing = make_event(
+        "singing"
+    )
 
     bm25_results = [
         BM25SearchResult(
@@ -65,14 +83,26 @@ def test_rrf_promotes_event_supported_by_both_retrievers():
         top_k=3,
     )
 
-    assert results[0].event.id == "game"
+    assert (
+        results[0].event.id
+        == "game"
+    )
 
-    assert results[0].bm25_rank == 2
-    assert results[0].vector_rank == 1
+    assert (
+        results[0].bm25_rank
+        == 2
+    )
+
+    assert (
+        results[0].vector_rank
+        == 1
+    )
 
 
 def test_rrf_keeps_single_source_event():
-    cat = make_event("cat")
+    cat = make_event(
+        "cat"
+    )
 
     results = rrf_fuse(
         bm25_results=[
@@ -86,9 +116,20 @@ def test_rrf_keeps_single_source_event():
 
     assert len(results) == 1
 
-    assert results[0].event.id == "cat"
-    assert results[0].bm25_rank == 1
-    assert results[0].vector_rank is None
+    assert (
+        results[0].event.id
+        == "cat"
+    )
+
+    assert (
+        results[0].bm25_rank
+        == 1
+    )
+
+    assert (
+        results[0].vector_rank
+        is None
+    )
 
 
 def test_rrf_respects_top_k():
@@ -118,7 +159,9 @@ def test_rrf_respects_top_k():
 def test_rrf_rejects_invalid_top_k():
     with pytest.raises(
         ValueError,
-        match="top_k must be >= 1",
+        match=(
+            "top_k must be >= 1"
+        ),
     ):
         rrf_fuse(
             [],
