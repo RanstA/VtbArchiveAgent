@@ -59,6 +59,32 @@ export interface DetectedHighlight {
   detectorVersion: string
 }
 
+export interface TimelineItem {
+  id: string
+
+  streamId: string
+
+  sourcePartIds: string[]
+
+  startMs: number
+  endMs: number
+  anchorMs: number
+
+  salienceScore: number
+
+  sourceHighlightIds: string[]
+}
+
+
+export interface StreamTimeline {
+  streamId: string
+
+  durationMs: number | null
+
+  mergeGapMs: number
+
+  items: TimelineItem[]
+}
 
 /**
  * 下面是旧 Event frontend model。

@@ -15,6 +15,7 @@ import type {
   DetectedHighlight,
   Stream,
   StreamDetail,
+  StreamTimeline,
 } from '@/types'
 
 
@@ -213,4 +214,24 @@ export async function getStreamHighlights(
   return mockRequest(
     [],
   )
+}
+
+export async function getStreamTimeline(
+  id: string,
+): Promise<StreamTimeline> {
+  if (!useMockApi) {
+    return request<StreamTimeline>(
+      `/streams/${id}/timeline`,
+    )
+  }
+
+  return mockRequest({
+    streamId: id,
+
+    durationMs: null,
+
+    mergeGapMs: 20_000,
+
+    items: [],
+  })
 }
