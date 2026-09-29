@@ -156,6 +156,15 @@ function isImportant(
 }
 
 
+function isSemantic(item: TimelineItem): boolean {
+  // Also tolerate responses from older archives that omit semantic fields.
+  return Boolean(item.title?.trim())
+}
+
+function itemTitle(item: TimelineItem): string {
+  return isSemantic(item) ? item.title! : '观众高反应片段'
+}
+
 function formatScore(
   value: number,
 ): string {
@@ -490,13 +499,12 @@ watch(
             </span>
 
             <h2>
-              Timeline Overview
+              直播事件时间轴
             </h2>
           </div>
 
           <span>
-            基于弹幕观众反应信号，
-            暂不代表主播事实。
+            语义事件与观众反应片段 · 整场时间
           </span>
         </div>
 
@@ -553,6 +561,8 @@ watch(
         <div v-if="items.length" class="timeline-map">
           <div class="timeline-track">
             <button v-for="item in items" :key="item.id" type="button" class="timeline-marker" :class="{
+              semantic: isSemantic(item),
+              fallback: !isSemantic(item),
               important:
                 isImportant(
                   item,
@@ -565,11 +575,10 @@ watch(
                 timelinePosition(
                   item.anchorMs,
                 ),
-            }" :title="`${formatTimestamp(
-              item.anchorMs,
-            )} · ${formatScore(
-              item.salienceScore,
-            )}`
+            }" :aria-label="`${formatTimestamp(item.anchorMs)} · ${itemTitle(item)}${isImportant(item) ? ' · 重点' : ''}`"
+              :aria-controls="`timeline-${item.id}`"
+              :aria-pressed="activeItemId === item.id"
+              :title="`${formatTimestamp(item.anchorMs)} · ${itemTitle(item)}`
               " @click="
                 focusItem(
                   item.id,
@@ -593,8 +602,12 @@ watch(
 
           <div class="timeline-legend">
             <span>
-              <i></i>
-              普通反应节点
+              <i class="semantic"></i>
+              语义事件
+            </span>
+            <span>
+              <i class="fallback"></i>
+              观众反应 · 暂无语义
             </span>
 
             <span>
@@ -618,7 +631,7 @@ watch(
             </span>
 
             <h2>
-              Stream Timeline
+              按时间回顾
             </h2>
           </div>
 
@@ -637,7 +650,9 @@ watch(
 
         <div v-if="items.length" class="timeline-list">
           <article v-for="item in items" :id="`timeline-${item.id}`
-            " :key="item.id" class="timeline-card" :class="{
+            " :key="item.id" class="timeline-card" tabindex="-1" :class="{
+              semantic: isSemantic(item),
+              fallback: !isSemantic(item),
               important:
                 isImportant(
                   item,
@@ -646,7 +661,9 @@ watch(
                 activeItemId
                 === item.id,
             }">
-            <button type="button" class="timeline-main" @click="
+            <button type="button" class="timeline-main"
+              :aria-expanded="activeItemId === item.id"
+              :aria-controls="`timeline-detail-${item.id}`" @click="
               toggleItem(
                 item.id,
               )
@@ -671,72 +688,28 @@ watch(
               </div>
 
 
-              <div class="timeline-kind">
-                <span v-if="
-                  isImportant(
-                    item,
-                  )
-                " class="
-                    importance-badge
-                    strong
-                  ">
-                  重点
+              <span class="timeline-copy">
+                <span class="timeline-kind">
+                  <span class="importance-badge">{{ isSemantic(item) ? '语义事件' : '观众反应信号' }}</span>
+                  <span v-if="isImportant(item)" class="importance-badge strong">重点</span>
                 </span>
-
-                <span v-else class="
-                    importance-badge
-                  ">
-                  观众反应
+                <strong class="timeline-title">{{ itemTitle(item) }}</strong>
+                <span class="timeline-summary" :class="{ pending: !isSemantic(item) || !item.summary?.trim() }">
+                  {{ isSemantic(item) && item.summary?.trim() ? item.summary : '暂未生成语义摘要' }}
                 </span>
-
-                <small>
-                  {{
-                    item
-                      .sourcePartIds
-                      .join(' · ')
-                  }}
-                </small>
-              </div>
-
-
-              <div class="score-column">
-                <div class="score-header">
-                  <span>
-                    SALIENCE
+                <span v-if="isSemantic(item) && (item.keywords?.length || item.entities?.length)" class="semantic-tags">
+                  <span v-for="(keyword, index) in item.keywords ?? []" :key="`keyword-${index}`" class="semantic-tag" :title="`关键词：${keyword}`">
+                    # {{ keyword }}
                   </span>
-
-                  <strong class="mono">
-                    {{
-                      formatScore(
-                        item
-                          .salienceScore,
-                      )
-                    }}
-                  </strong>
-                </div>
-
-                <div class="score-track">
-                  <i :style="{
-                    width:
-                      `${item.salienceScore * 100}%`,
-                  }"></i>
-                </div>
-              </div>
-
-
-              <div class="source-count">
-                <strong>
-                  {{
-                    item
-                      .sourceHighlightIds
-                      .length
-                  }}
-                </strong>
-
-                <span>
-                  SIGNALS
+                  <span v-for="(entity, index) in item.entities ?? []" :key="`entity-${index}`" class="semantic-tag entity" :title="`实体：${entity}`">
+                    <span class="entity-label">实体</span> {{ entity }}
+                  </span>
                 </span>
-              </div>
+                <span class="timeline-meta">
+                  <span>显著度 <span class="mono">{{ formatScore(item.salienceScore) }}</span></span>
+                  <span>{{ item.evidenceRefs?.length ? `${item.evidenceRefs.length} 条证据引用` : '暂无证据引用' }}</span>
+                </span>
+              </span>
 
 
               <span class="expand-indicator">
@@ -763,11 +736,11 @@ watch(
             <div v-if="
               activeItemId
               === item.id
-            " class="timeline-detail">
+            " class="timeline-detail" :id="`timeline-detail-${item.id}`">
               <div class="detail-grid">
                 <div>
                   <span>
-                    ANCHOR
+                    定位时间（整场）
                   </span>
 
                   <strong>
@@ -781,7 +754,7 @@ watch(
 
                 <div>
                   <span>
-                    SOURCE PART
+                    来源 Part
                   </span>
 
                   <strong>
@@ -795,7 +768,7 @@ watch(
 
                 <div>
                   <span>
-                    MERGED SIGNALS
+                    来源 Highlight Signal
                   </span>
 
                   <strong>
@@ -809,7 +782,7 @@ watch(
 
                 <div>
                   <span>
-                    IMPORTANCE
+                    重点标记
                   </span>
 
                   <strong>
@@ -817,26 +790,30 @@ watch(
                       isImportant(
                         item,
                       )
-                        ? 'IMPORTANT'
-                        : 'NORMAL'
+                        ? '重点'
+                        : '普通'
                     }}
                   </strong>
                 </div>
               </div>
 
+              <div v-if="item.evidenceRefs?.length" class="evidence-references">
+                <strong>证据引用 · {{ item.evidenceRefs.length }}</strong>
+                <ul aria-label="证据引用标识">
+                  <li v-for="(reference, index) in item.evidenceRefs" :key="index"><code>{{ reference }}</code></li>
+                </ul>
+              </div>
 
               <div class="evidence-note">
                 <strong>
                   Evidence boundary
                 </strong>
 
-                <p>
-                  当前 Timeline Item
-                  来自弹幕密度、重复和反应信号。
-                  系统只能确认这里存在明显的观众集中反应；
-                  在加入 Topic Segmenter、ASR
-                  或更高等级证据前，
-                  不据此断言主播具体说了什么或做了什么。
+                <p v-if="isSemantic(item)">
+                  标题与摘要来自后端语义化结果。证据引用用于追溯来源，不代表内容已经人工核实；可空降回放查看上下文。
+                </p>
+                <p v-else>
+                  当前片段仅表示观众出现较强的集中反应，暂未生成语义摘要，不能据此断言主播具体说了什么或做了什么。
                 </p>
               </div>
             </div>
@@ -1008,6 +985,26 @@ watch(
     999px;
 }
 
+.timeline-marker.semantic,
+.timeline-legend i.semantic {
+  border-radius: 3px;
+}
+
+.timeline-marker.fallback,
+.timeline-legend i.fallback {
+  background: var(--surface);
+  border: 2px solid var(--muted);
+}
+
+.timeline-marker.fallback.important,
+.timeline-marker.fallback.active,
+.timeline-marker.fallback:hover {
+  border-color: var(--accent);
+}
+
+.timeline-marker:focus-visible {
+  z-index: 2;
+}
 
 .timeline-axis {
   display: flex;
@@ -1086,6 +1083,7 @@ watch(
 
 
 .timeline-card {
+  scroll-margin-top: 76px;
   overflow: hidden;
 
   border:
@@ -1120,11 +1118,11 @@ watch(
   display: grid;
 
   grid-template-columns:
-    180px 150px minmax(240px, 1fr) 90px 32px;
+    140px minmax(0, 1fr) 32px;
 
   gap: 20px;
 
-  align-items: center;
+  align-items: start;
 
   padding:
     15px 20px;
@@ -1150,6 +1148,7 @@ watch(
 
 
 .timeline-time {
+  padding-top: 4px;
   display: grid;
 
   gap: 5px;
@@ -1175,14 +1174,95 @@ watch(
 
 
 .timeline-kind {
-  display: grid;
-
-  justify-items:
-    start;
-
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 7px;
 }
 
+.timeline-copy {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.timeline-title {
+  display: block;
+  margin-top: 10px;
+  color: var(--text-strong);
+  font-size: 1.02rem;
+  font-weight: 620;
+  line-height: 1.55;
+}
+
+.timeline-summary {
+  display: block;
+  margin-top: 7px;
+  color: var(--text);
+  font-size: .83rem;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+.timeline-summary.pending,
+.timeline-card.fallback .timeline-title {
+  color: var(--muted);
+}
+
+.semantic-tags,
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-top: 12px;
+}
+
+.semantic-tag {
+  padding: 3px 7px;
+  color: var(--muted);
+  background: var(--surface-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: .7rem;
+  line-height: 1.5;
+}
+
+.semantic-tag.entity {
+  background: transparent;
+}
+
+.entity-label {
+  margin-right: 4px;
+  color: var(--faint);
+  font-size: .62rem;
+}
+
+.timeline-meta {
+  gap: 8px 18px;
+  color: var(--muted);
+  font-size: .69rem;
+  line-height: 1.5;
+}
+
+.evidence-references {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.6;
+}
+
+.evidence-references ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.evidence-references code {
+  font-size: .7rem;
+  overflow-wrap: anywhere;
+}
 
 .timeline-kind small {
   color:
@@ -1469,7 +1549,7 @@ watch(
 @media (max-width: 1000px) {
   .timeline-main {
     grid-template-columns:
-      140px 120px 1fr 70px 24px;
+      120px minmax(0, 1fr) 24px;
 
     gap: 12px;
   }
@@ -1490,11 +1570,14 @@ watch(
       1fr auto;
   }
 
-  .timeline-kind,
-  .score-column,
-  .source-count {
-    grid-column:
-      1 / -1;
+  .timeline-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .expand-indicator {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 </style>

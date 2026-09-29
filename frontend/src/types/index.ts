@@ -73,6 +73,14 @@ export interface TimelineItem {
 
   salienceScore: number
 
+  /** Null title identifies a Highlight fallback, without semantic claims. */
+  title: string | null
+  summary: string | null
+  keywords: string[]
+  entities: string[]
+  /** Opaque references; may include highlight:, danmaku:, asr:, vlm:, etc. */
+  evidenceRefs: string[]
+
   sourceHighlightIds: string[]
 }
 
