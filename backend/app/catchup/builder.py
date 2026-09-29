@@ -4,13 +4,10 @@ from datetime import datetime
 from app.catchup.descriptor import (
     StreamDescriptor,
     ImportantMomentDescriptor,
+    EventDescriptor,
 )
-from app.repository.stream_repo import (
-    get_stream_by_id,
-)
-from app.event_pipeline.timeline import (
-    build_stream_timeline,
-)
+from app.repository.stream_repo import get_stream_by_id
+from app.event_pipeline.timeline import build_stream_timeline
 
 
 def build_stream_descriptor(
@@ -56,6 +53,35 @@ def build_stream_descriptor(
         for item in timeline.items
         if item.salience_score >= 0.95
     ]
+    
+    events = [
+        EventDescriptor(
+            anchor_ms=item.anchor_ms,
+            local_anchor_ms=(
+                item.local_anchor_ms
+            ),
+            source_part_ids=(
+                item.source_part_ids
+            ),
+            salience_score=(
+                item.salience_score
+            ),
+            title=item.title,
+            summary=item.summary,
+            keywords=item.keywords,
+            entities=item.entities,
+            evidence_refs=(
+                item.evidence_refs
+            ),
+        )
+        for item in timeline.items
+        if (
+            item.title is not None
+            or item.summary is not None
+            or bool(item.keywords)
+            or bool(item.entities)
+        )
+    ]
 
     return StreamDescriptor(
         stream_id=stream["id"],
@@ -66,4 +92,5 @@ def build_stream_descriptor(
         duration_ms=timeline.duration_ms,
         bv_ids=stream["bv_ids"],
         important_moments=important_moments,
+        events=events
     )

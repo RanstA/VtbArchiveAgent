@@ -105,6 +105,14 @@ class TimelineItemResponse(BaseModel):
     localAnchorMs: int
 
     salienceScore: float
+    
+    title: str | None = None
+    summary: str | None = None
+
+    keywords: list[str]
+    entities: list[str]
+
+    evidenceRefs: list[str]
 
     sourceHighlightIds: list[str]
 
@@ -332,6 +340,11 @@ def get_stream_timeline(
                     localAnchorMs=(item.local_anchor_ms),
                     salienceScore=(item.salience_score),
                     sourceHighlightIds=(item.source_highlight_ids),
+                    title=item.title,
+                    summary=item.summary,
+                    keywords=item.keywords,
+                    entities=item.entities,
+                    evidenceRefs=item.evidence_refs,
                 )
                 for item in timeline.items
             ],

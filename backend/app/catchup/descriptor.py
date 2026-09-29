@@ -1,9 +1,6 @@
 from datetime import datetime
 
-from pydantic import (
-    BaseModel,
-    Field,
-)
+from pydantic import BaseModel, Field
 
 
 class ImportantMomentDescriptor(BaseModel):
@@ -23,18 +20,42 @@ class ImportantMomentDescriptor(BaseModel):
 
     local_anchor_ms: int = Field(ge=0)
 
-    source_part_ids: list[str] = Field(
-        min_length=1,
-    )
+    source_part_ids: list[str] = Field(min_length=1)
 
-    salience_score: float = Field(
-        ge=0.0,
-        le=1.0,
-    )
+    salience_score: float = Field(ge=0.0, le=1.0)
 
-    source_highlight_ids: list[str] = Field(
-        default_factory=list,
-    )
+    source_highlight_ids: list[str] = Field(default_factory=list)
+
+
+class EventDescriptor(BaseModel):
+    """
+    Catch-up 输入中的语义事件。
+
+    它描述的是“这段时间发生了什么”，
+    而不只是“这里弹幕反应很强”。
+
+    当前语义字段允许为空，
+    后续可由 Semanticizer / ASR / VLM
+    等不同来源补充。
+    """
+
+    anchor_ms: int = Field(ge=0)
+
+    local_anchor_ms: int = Field(ge=0)
+
+    source_part_ids: list[str] = Field(min_length=1)
+
+    salience_score: float = Field(ge=0.0, le=1.0)
+
+    title: str | None = None
+
+    summary: str | None = None
+
+    keywords: list[str] = Field(default_factory=list)
+
+    entities: list[str] = Field(default_factory=list)
+
+    evidence_refs: list[str] = Field(default_factory=list)
 
 
 class StreamDescriptor(BaseModel):
@@ -52,15 +73,10 @@ class StreamDescriptor(BaseModel):
 
     live_time: datetime
 
-    duration_ms: int | None = Field(
-        default=None,
-        gt=0,
-    )
+    duration_ms: int | None = Field(default=None, gt=0)
 
-    bv_ids: list[str] = Field(
-        default_factory=list,
-    )
+    bv_ids: list[str] = Field(default_factory=list)
 
-    important_moments: list[ImportantMomentDescriptor] = Field(
-        default_factory=list,
-    )
+    important_moments: list[ImportantMomentDescriptor] = Field(default_factory=list)
+
+    events: list[EventDescriptor] = Field(default_factory=list)

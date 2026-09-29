@@ -5,13 +5,9 @@ from pathlib import Path
 def connect_db(
     db_path: Path,
 ) -> sqlite3.Connection:
-    connection = sqlite3.connect(
-        db_path
-    )
+    connection = sqlite3.connect(db_path)
 
-    connection.execute(
-        "PRAGMA foreign_keys = ON"
-    )
+    connection.execute("PRAGMA foreign_keys = ON")
 
     return connection
 
@@ -39,14 +35,9 @@ def _table_columns(
     connection: sqlite3.Connection,
     table_name: str,
 ) -> set[str]:
-    rows = connection.execute(
-        f"PRAGMA table_info({table_name})"
-    ).fetchall()
+    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
 
-    return {
-        row[1]
-        for row in rows
-    }
+    return {row[1] for row in rows}
 
 
 def _assert_schema_compatible(
@@ -96,17 +87,10 @@ def _assert_schema_compatible(
         "duration_ms",
     }
 
-    missing_part_columns = (
-        required_part_columns
-        - part_columns
-    )
+    missing_part_columns = required_part_columns - part_columns
 
     if missing_part_columns:
-        missing_text = ", ".join(
-            sorted(
-                missing_part_columns
-            )
-        )
+        missing_text = ", ".join(sorted(missing_part_columns))
 
         raise RuntimeError(
             "Legacy database schema detected: "
@@ -116,15 +100,13 @@ def _assert_schema_compatible(
             "database and re-import the archive."
         )
 
+
 def init_db(
     connection: sqlite3.Connection,
 ) -> None:
-    _assert_schema_compatible(
-        connection
-    )
+    _assert_schema_compatible(connection)
 
-    connection.executescript(
-        """
+    connection.executescript("""
         CREATE TABLE IF NOT EXISTS vtubers (
             id TEXT PRIMARY KEY,
             display_name TEXT NOT NULL
@@ -353,6 +335,58 @@ def init_db(
         );
 
 
+        CREATE TABLE IF NOT EXISTS events (
+            id TEXT PRIMARY KEY,
+
+            stream_id TEXT NOT NULL,
+
+            source_part_ids TEXT NOT NULL,
+
+            start_ms INTEGER NOT NULL,
+            end_ms INTEGER NOT NULL,
+            anchor_ms INTEGER NOT NULL,
+
+            source_highlight_ids TEXT NOT NULL,
+
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+
+            keywords TEXT NOT NULL,
+            entities TEXT NOT NULL,
+
+            semantic_text TEXT NOT NULL,
+
+            salience_score REAL NOT NULL,
+
+            segmenter_version TEXT NOT NULL,
+            semanticizer_version TEXT NOT NULL,
+
+            CHECK (
+                start_ms >= 0
+            ),
+
+            CHECK (
+                end_ms > start_ms
+            ),
+
+            CHECK (
+                anchor_ms >= start_ms
+                AND anchor_ms < end_ms
+            ),
+
+            CHECK (
+                salience_score >= 0.0
+                AND salience_score <= 1.0
+            ),
+
+            FOREIGN KEY (
+                stream_id
+            )
+                REFERENCES streams(id)
+                ON DELETE CASCADE
+        );
+
+
         CREATE INDEX IF NOT EXISTS
             idx_streams_vtuber_live_time
         ON streams(
@@ -383,7 +417,21 @@ def init_db(
         ON highlights(
             score DESC
         );
-        """
-    )
+
+
+        CREATE INDEX IF NOT EXISTS
+            idx_events_stream_time
+        ON events(
+            stream_id,
+            start_ms
+        );
+
+
+        CREATE INDEX IF NOT EXISTS
+            idx_events_salience
+        ON events(
+            salience_score DESC
+        );
+        """)
 
     connection.commit()

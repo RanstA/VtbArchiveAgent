@@ -6,7 +6,16 @@ from pathlib import Path
 from fastapi.testclient import (
     TestClient,
 )
-
+from app.domain.event import (
+    Event,
+    make_event_id,
+)
+from app.event_pipeline.timeline import (
+    build_stream_timeline,
+)
+from app.repository.event_repo import (
+    upsert_event,
+)
 from app.config.settings import (
     settings,
 )
@@ -247,7 +256,7 @@ def test_timeline_converts_to_stream_global_time(
     assert first["endMs"] == 50_000
 
     assert first["anchorMs"] == 35_000
-    
+
     assert first["localAnchorMs"] == 35_000
 
     assert first["salienceScore"] == 0.96
@@ -270,7 +279,7 @@ def test_timeline_converts_to_stream_global_time(
     # score 更高的第二个 Highlight
     # 提供 anchor。
     assert second["anchorMs"] == 160_000
-    
+
     assert second["localAnchorMs"] == 60_000
 
     assert second["salienceScore"] == 0.97
@@ -298,3 +307,192 @@ def test_unknown_stream_timeline_returns_404(
     response = client.get("/streams/missing/timeline")
 
     assert response.status_code == 404
+
+
+def test_timeline_prefers_persisted_events(
+    tmp_path: Path,
+):
+    db_path = tmp_path / "timeline.db"
+
+    (
+        stream_id,
+        _,
+        _,
+        p1_second,
+    ) = prepare_database(db_path)
+
+    connection = connect_db(db_path)
+
+    try:
+        event = Event(
+            id=make_event_id(
+                stream_id=stream_id,
+                start_ms=120_000,
+                end_ms=180_000,
+            ),
+            stream_id=stream_id,
+            source_part_ids=[
+                "p1",
+            ],
+            start_ms=120_000,
+            end_ms=180_000,
+            anchor_ms=160_000,
+            source_highlight_ids=[
+                p1_second.id,
+            ],
+            title="神秘园环节",
+            summary=("主播进入神秘园相关话题。"),
+            keywords=[
+                "神秘园",
+            ],
+            entities=[
+                "神秘园",
+            ],
+            semantic_text=("神秘园环节\n" "主播进入神秘园相关话题。\n" "神秘园"),
+            salience_score=0.97,
+            segmenter_version=("highlight-merge-v1"),
+            semanticizer_version="v1",
+        )
+
+        upsert_event(
+            connection=connection,
+            event=event,
+        )
+
+        timeline = build_stream_timeline(
+            connection=connection,
+            stream_id=stream_id,
+        )
+
+        assert timeline is not None
+
+        # 原始 Highlight fallback
+        # 会生成 2 个 TimelineItem。
+        #
+        # 一旦 persisted Event 存在，
+        # Timeline 应优先使用 Event，
+        # 所以这里只剩 1 个。
+        assert len(timeline.items) == 1
+
+        item = timeline.items[0]
+
+        assert item.id == event.id
+
+        assert item.title == ("神秘园环节")
+
+        assert item.summary == ("主播进入神秘园相关话题。")
+
+        assert item.keywords == [
+            "神秘园",
+        ]
+
+        assert item.entities == [
+            "神秘园",
+        ]
+
+        assert item.anchor_ms == 160_000
+
+        # p1 offset = 100_000
+        assert item.local_anchor_ms == 60_000
+
+        assert item.evidence_refs == [
+            ("highlight:" f"{p1_second.id}"),
+        ]
+
+        assert item.source_highlight_ids == [
+            p1_second.id,
+        ]
+
+    finally:
+        connection.close()
+        
+def test_timeline_api_exposes_event_semantics(
+    tmp_path: Path,
+    monkeypatch,
+):
+    db_path = tmp_path / "timeline.db"
+
+    (
+        stream_id,
+        _,
+        _,
+        p1_second,
+    ) = prepare_database(db_path)
+
+    connection = connect_db(db_path)
+
+    try:
+        event = Event(
+            id=make_event_id(
+                stream_id=stream_id,
+                start_ms=120_000,
+                end_ms=180_000,
+            ),
+            stream_id=stream_id,
+            source_part_ids=["p1"],
+            start_ms=120_000,
+            end_ms=180_000,
+            anchor_ms=160_000,
+            source_highlight_ids=[
+                p1_second.id,
+            ],
+            title="神秘园环节",
+            summary="主播进入神秘园相关话题。",
+            keywords=["神秘园"],
+            entities=["神秘园"],
+            semantic_text=(
+                "神秘园环节\n"
+                "主播进入神秘园相关话题。\n"
+                "神秘园"
+            ),
+            salience_score=0.97,
+            segmenter_version=(
+                "highlight-merge-v1"
+            ),
+            semanticizer_version="v1",
+        )
+
+        upsert_event(
+            connection=connection,
+            event=event,
+        )
+
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        settings,
+        "database_path",
+        db_path,
+    )
+
+    response = client.get(
+        f"/streams/{stream_id}/timeline"
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert len(payload["items"]) == 1
+
+    item = payload["items"][0]
+
+    assert item["title"] == "神秘园环节"
+
+    assert (
+        item["summary"]
+        == "主播进入神秘园相关话题。"
+    )
+
+    assert item["keywords"] == [
+        "神秘园",
+    ]
+
+    assert item["entities"] == [
+        "神秘园",
+    ]
+
+    assert item["evidenceRefs"] == [
+        f"highlight:{p1_second.id}",
+    ]
