@@ -105,6 +105,8 @@ class TimelineItemResponse(BaseModel):
     startMs: int
     endMs: int
     anchorMs: int
+    
+    localAnchorMs: int
 
     salienceScore: float
 
@@ -447,6 +449,7 @@ def get_stream_timeline(
                     anchorMs=(
                         anchor_ms
                     ),
+                    localAnchorMs=candidate.peak_ms,
                     salienceScore=(
                         salience_score
                     ),

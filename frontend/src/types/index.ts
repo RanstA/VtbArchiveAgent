@@ -69,6 +69,7 @@ export interface TimelineItem {
   startMs: number
   endMs: number
   anchorMs: number
+  localAnchorMs: number
 
   salienceScore: number
 

@@ -108,6 +108,14 @@ const durationLabel = computed(() =>
   duration.value === null ? '时长暂未提供' : formatTimestamp(duration.value),
 )
 
+const halfDurationLabel = computed(() =>
+  duration.value === null
+    ? '—'
+    : formatTimestamp(
+      duration.value / 2,
+    ),
+)
+
 // Only stagger crowded markers vertically; horizontal positions stay stream-global.
 const timelineMarkers = computed(() => {
   if (!duration.value) return []
@@ -176,6 +184,90 @@ function timelinePosition(
   return `${ratio * 100}%`
 }
 
+function getBilibiliPartNumber(
+  item: TimelineItem,
+): number | null {
+  if (
+    item.sourcePartIds.length
+    !== 1
+  ) {
+    return null
+  }
+
+  const partId =
+    item.sourcePartIds[0]
+
+  const match =
+    /^p(\d+)$/.exec(
+      partId,
+    )
+
+  if (!match) {
+    return null
+  }
+
+  return (
+    Number(match[1])
+    + 1
+  )
+}
+
+
+function buildBilibiliJumpUrl(
+  item: TimelineItem,
+): string | undefined {
+  if (
+    !stream.value
+    || stream.value.bvIds.length
+    !== 1
+  ) {
+    return undefined
+  }
+
+  const bvId =
+    stream.value.bvIds[0]
+
+  const partNumber =
+    getBilibiliPartNumber(
+      item,
+    )
+
+  if (
+    !bvId
+    || partNumber === null
+  ) {
+    return undefined
+  }
+
+  const seconds =
+    Math.floor(
+      item.localAnchorMs
+      / 1000,
+    )
+
+  const params =
+    new URLSearchParams()
+
+  if (
+    partNumber > 1
+  ) {
+    params.set(
+      'p',
+      String(
+        partNumber,
+      ),
+    )
+  }
+
+  params.set(
+    't',
+    String(seconds),
+  )
+
+  return (
+    `https://www.bilibili.com/video/${bvId}/?${params.toString()}`
+  )
+}
 
 function toggleItem(
   itemId: string,
@@ -199,9 +291,9 @@ async function focusItem(
   const card = document.getElementById(`timeline-${itemId}`)
   card?.focus({ preventScroll: true })
   card?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'center',
-    })
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'center',
+  })
 }
 
 let loadVersion = 0
@@ -299,38 +391,28 @@ watch(
 
 
 <template>
-  <main
-    class="
+  <main class="
       page
       timeline-page
-    "
-  >
-    <RouterLink
-      class="back-link"
-      :to="{
-        name: 'archive',
-        params: {
-          vtuberId:
-            route.params
-              .vtuberId,
-        },
-      }"
-    >
+    ">
+    <RouterLink class="back-link" :to="{
+      name: 'archive',
+      params: {
+        vtuberId:
+          route.params
+            .vtuberId,
+      },
+    }">
       ← 返回直播档案
     </RouterLink>
 
 
-    <header
-      v-if="stream"
-      class="
+    <header v-if="stream" class="
         page-header
         timeline-header
-      "
-    >
+      ">
       <div>
-        <span
-          class="eyebrow"
-        >
+        <span class="eyebrow">
           STREAM TIMELINE /
           {{
             stream.bvIds
@@ -342,9 +424,7 @@ watch(
           {{ stream.title }}
         </h1>
 
-        <div
-          class="stream-facts"
-        >
+        <div class="stream-facts">
           <span>
             {{
               formatDateTime(
@@ -361,18 +441,12 @@ watch(
           </span>
 
           <span>
-            {{
-              formatTimestamp(
-                duration,
-              )
-            }}
+            {{ durationLabel }}
           </span>
         </div>
       </div>
 
-      <div
-        class="archive-stamp"
-      >
+      <div class="archive-stamp">
         <span>
           TIMELINE
         </span>
@@ -384,22 +458,16 @@ watch(
     </header>
 
 
-    <div
-      v-if="loading"
-      class="page-loading"
-    >
+    <div v-if="loading" class="page-loading">
       正在构建整场直播时间线…
     </div>
 
 
-    <p
-      v-else-if="
-        error
-        || !stream
-        || !timeline
-      "
-      class="error-banner"
-    >
+    <p v-else-if="
+      error
+      || !stream
+      || !timeline
+    " class="error-banner">
       {{
         error
         || '未找到该直播时间线。'
@@ -407,25 +475,17 @@ watch(
     </p>
 
 
-    <template
-      v-else
-    >
-      <section
-        class="
+    <template v-else>
+      <section class="
           content-panel
           timeline-overview
-        "
-      >
-        <div
-          class="
+        ">
+        <div class="
             section-heading
             compact
-          "
-        >
+          ">
           <div>
-            <span
-              class="section-index"
-            >
+            <span class="section-index">
               01
             </span>
 
@@ -441,28 +501,18 @@ watch(
         </div>
 
 
-        <div
-          class="summary-grid"
-        >
-          <div
-            class="summary-item"
-          >
+        <div class="summary-grid">
+          <div class="summary-item">
             <span>
               DURATION
             </span>
 
             <strong>
-              {{
-                formatTimestamp(
-                  duration,
-                )
-              }}
+              {{ durationLabel }}
             </strong>
           </div>
 
-          <div
-            class="summary-item"
-          >
+          <div class="summary-item">
             <span>
               PARTS
             </span>
@@ -474,9 +524,7 @@ watch(
             </strong>
           </div>
 
-          <div
-            class="summary-item"
-          >
+          <div class="summary-item">
             <span>
               TIMELINE ITEMS
             </span>
@@ -488,9 +536,7 @@ watch(
             </strong>
           </div>
 
-          <div
-            class="summary-item"
-          >
+          <div class="summary-item">
             <span>
               IMPORTANT
             </span>
@@ -504,84 +550,55 @@ watch(
         </div>
 
 
-        <div
-          v-if="items.length"
-          class="timeline-map"
-        >
-          <div
-            class="timeline-track"
-          >
-            <button
-              v-for="item in items"
-              :key="item.id"
-              type="button"
-              class="timeline-marker"
-              :class="{
-                important:
-                  isImportant(
-                    item,
-                  ),
-                active:
-                  activeItemId
-                  === item.id,
-              }"
-              :style="{
-                left:
-                  timelinePosition(
-                    item.anchorMs,
-                  ),
-              }"
-              :title="
-                `${formatTimestamp(
+        <div v-if="items.length" class="timeline-map">
+          <div class="timeline-track">
+            <button v-for="item in items" :key="item.id" type="button" class="timeline-marker" :class="{
+              important:
+                isImportant(
+                  item,
+                ),
+              active:
+                activeItemId
+                === item.id,
+            }" :style="{
+              left:
+                timelinePosition(
                   item.anchorMs,
-                )} · ${formatScore(
-                  item.salienceScore,
-                )}`
-              "
-              @click="
+                ),
+            }" :title="`${formatTimestamp(
+              item.anchorMs,
+            )} · ${formatScore(
+              item.salienceScore,
+            )}`
+              " @click="
                 focusItem(
                   item.id,
                 )
-              "
-            ></button>
+                "></button>
           </div>
 
-          <div
-            class="timeline-axis"
-          >
+          <div class="timeline-axis">
             <span>
               00:00:00
             </span>
 
             <span>
-              {{
-                formatTimestamp(
-                  duration / 2,
-                )
-              }}
+              {{ halfDurationLabel }}
             </span>
 
             <span>
-              {{
-                formatTimestamp(
-                  duration,
-                )
-              }}
+              {{ durationLabel }}
             </span>
           </div>
 
-          <div
-            class="timeline-legend"
-          >
+          <div class="timeline-legend">
             <span>
               <i></i>
               普通反应节点
             </span>
 
             <span>
-              <i
-                class="important"
-              ></i>
+              <i class="important"></i>
               重点节点
               ≥
               {{
@@ -593,16 +610,10 @@ watch(
       </section>
 
 
-      <section
-        class="timeline-section"
-      >
-        <header
-          class="section-heading"
-        >
+      <section class="timeline-section">
+        <header class="section-heading">
           <div>
-            <span
-              class="section-index"
-            >
+            <span class="section-index">
               02
             </span>
 
@@ -624,18 +635,9 @@ watch(
         </header>
 
 
-        <div
-          v-if="items.length"
-          class="timeline-list"
-        >
-          <article
-            v-for="item in items"
-            :id="
-              `timeline-${item.id}`
-            "
-            :key="item.id"
-            class="timeline-card"
-            :class="{
+        <div v-if="items.length" class="timeline-list">
+          <article v-for="item in items" :id="`timeline-${item.id}`
+            " :key="item.id" class="timeline-card" :class="{
               important:
                 isImportant(
                   item,
@@ -643,23 +645,14 @@ watch(
               active:
                 activeItemId
                 === item.id,
-            }"
-          >
-            <button
-              type="button"
-              class="timeline-main"
-              @click="
-                toggleItem(
-                  item.id,
-                )
-              "
-            >
-              <div
-                class="timeline-time"
-              >
-                <strong
-                  class="mono"
-                >
+            }">
+            <button type="button" class="timeline-main" @click="
+              toggleItem(
+                item.id,
+              )
+              ">
+              <div class="timeline-time">
+                <strong class="mono">
                   {{
                     formatTimestamp(
                       item.startMs,
@@ -678,29 +671,21 @@ watch(
               </div>
 
 
-              <div
-                class="timeline-kind"
-              >
-                <span
-                  v-if="
-                    isImportant(
-                      item,
-                    )
-                  "
-                  class="
+              <div class="timeline-kind">
+                <span v-if="
+                  isImportant(
+                    item,
+                  )
+                " class="
                     importance-badge
                     strong
-                  "
-                >
+                  ">
                   重点
                 </span>
 
-                <span
-                  v-else
-                  class="
+                <span v-else class="
                     importance-badge
-                  "
-                >
+                  ">
                   观众反应
                 </span>
 
@@ -714,19 +699,13 @@ watch(
               </div>
 
 
-              <div
-                class="score-column"
-              >
-                <div
-                  class="score-header"
-                >
+              <div class="score-column">
+                <div class="score-header">
                   <span>
                     SALIENCE
                   </span>
 
-                  <strong
-                    class="mono"
-                  >
+                  <strong class="mono">
                     {{
                       formatScore(
                         item
@@ -736,22 +715,16 @@ watch(
                   </strong>
                 </div>
 
-                <div
-                  class="score-track"
-                >
-                  <i
-                    :style="{
-                      width:
-                        `${item.salienceScore * 100}%`,
-                    }"
-                  ></i>
+                <div class="score-track">
+                  <i :style="{
+                    width:
+                      `${item.salienceScore * 100}%`,
+                  }"></i>
                 </div>
               </div>
 
 
-              <div
-                class="source-count"
-              >
+              <div class="source-count">
                 <strong>
                   {{
                     item
@@ -766,9 +739,7 @@ watch(
               </div>
 
 
-              <span
-                class="expand-indicator"
-              >
+              <span class="expand-indicator">
                 {{
                   activeItemId
                     === item.id
@@ -778,17 +749,22 @@ watch(
               </span>
             </button>
 
+            <a v-if="
+              buildBilibiliJumpUrl(
+                item,
+              )
+            " class="replay-jump-link" :href="buildBilibiliJumpUrl(
+                item,
+              )
+                " target="_blank" rel="noopener noreferrer">
+              空降回放 ↗
+            </a>
 
-            <div
-              v-if="
-                activeItemId
-                === item.id
-              "
-              class="timeline-detail"
-            >
-              <div
-                class="detail-grid"
-              >
+            <div v-if="
+              activeItemId
+              === item.id
+            " class="timeline-detail">
+              <div class="detail-grid">
                 <div>
                   <span>
                     ANCHOR
@@ -849,9 +825,7 @@ watch(
               </div>
 
 
-              <div
-                class="evidence-note"
-              >
+              <div class="evidence-note">
                 <strong>
                   Evidence boundary
                 </strong>
@@ -870,10 +844,7 @@ watch(
         </div>
 
 
-        <div
-          v-else
-          class="empty-panel"
-        >
+        <div v-else class="empty-panel">
           该直播已有档案，
           但暂未检测到 Timeline Item。
         </div>
@@ -893,8 +864,7 @@ watch(
   color: var(--muted);
 
   font:
-    600 .72rem/1
-    ui-monospace,
+    600 .72rem/1 ui-monospace,
     monospace;
 
   letter-spacing: .07em;
@@ -910,10 +880,8 @@ watch(
   display: grid;
 
   grid-template-columns:
-    repeat(
-      4,
-      minmax(0, 1fr)
-    );
+    repeat(4,
+      minmax(0, 1fr));
 
   border-top:
     1px solid var(--line);
@@ -939,8 +907,7 @@ watch(
   color: var(--faint);
 
   font:
-    600 .66rem/1
-    ui-monospace,
+    600 .66rem/1 ui-monospace,
     monospace;
 
   letter-spacing: .12em;
@@ -990,14 +957,11 @@ watch(
   padding: 0;
 
   transform:
-    translate(
-      -50%,
-      -50%
-    );
+    translate(-50%,
+      -50%);
 
   border:
-    2px solid
-    var(--surface);
+    2px solid var(--surface);
 
   border-radius:
     999px;
@@ -1036,12 +1000,9 @@ watch(
   inset: -5px;
 
   border:
-    1px solid
-    color-mix(
-      in srgb,
+    1px solid color-mix(in srgb,
       var(--accent) 45%,
-      transparent
-    );
+      transparent);
 
   border-radius:
     999px;
@@ -1060,8 +1021,7 @@ watch(
     var(--faint);
 
   font:
-    .66rem/1
-    ui-monospace,
+    .66rem/1 ui-monospace,
     monospace;
 }
 
@@ -1141,18 +1101,15 @@ watch(
 
 .timeline-card.important {
   border-left:
-    3px solid
-    var(--accent);
+    3px solid var(--accent);
 }
 
 
 .timeline-card.active {
   border-color:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--accent) 45%,
-      var(--line)
-    );
+      var(--line));
 }
 
 
@@ -1163,11 +1120,7 @@ watch(
   display: grid;
 
   grid-template-columns:
-    180px
-    150px
-    minmax(240px, 1fr)
-    90px
-    32px;
+    180px 150px minmax(240px, 1fr) 90px 32px;
 
   gap: 20px;
 
@@ -1236,8 +1189,7 @@ watch(
     var(--faint);
 
   font:
-    .64rem/1
-    ui-monospace,
+    .64rem/1 ui-monospace,
     monospace;
 }
 
@@ -1253,8 +1205,7 @@ watch(
     var(--surface-deep);
 
   border:
-    1px solid
-    var(--line);
+    1px solid var(--line);
 
   border-radius:
     999px;
@@ -1272,11 +1223,9 @@ watch(
     var(--accent-soft);
 
   border-color:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--accent) 35%,
-      var(--line)
-    );
+      var(--line));
 }
 
 
@@ -1360,8 +1309,7 @@ watch(
     var(--faint);
 
   font:
-    .62rem/1
-    ui-monospace,
+    .62rem/1 ui-monospace,
     monospace;
 
   letter-spacing:
@@ -1379,6 +1327,44 @@ watch(
   text-align: center;
 }
 
+.replay-jump-link {
+  display: inline-flex;
+  align-items: center;
+
+  margin:
+    0 20px 14px;
+
+  padding:
+    7px 10px;
+
+  color:
+    var(--accent);
+
+  background:
+    var(--accent-soft);
+
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 30%,
+      var(--line)
+    );
+
+  border-radius:
+    999px;
+
+  font-size:
+    .72rem;
+
+  text-decoration: none;
+}
+
+
+.replay-jump-link:hover {
+  background:
+    var(--surface-hover);
+}
 
 .timeline-detail {
   padding: 20px;
@@ -1395,16 +1381,14 @@ watch(
   display: grid;
 
   grid-template-columns:
-    repeat(
-      4,
-      minmax(0, 1fr)
-    );
+    repeat(4,
+      minmax(0, 1fr));
 
   gap: 10px;
 }
 
 
-.detail-grid > div {
+.detail-grid>div {
   padding: 14px;
 
   border:
@@ -1425,8 +1409,7 @@ watch(
     var(--faint);
 
   font:
-    .62rem/1
-    ui-monospace,
+    .62rem/1 ui-monospace,
     monospace;
 
   letter-spacing:
@@ -1450,8 +1433,7 @@ watch(
   padding: 16px;
 
   border-left:
-    2px solid
-    var(--accent);
+    2px solid var(--accent);
 
   background:
     var(--accent-soft);
@@ -1484,38 +1466,28 @@ watch(
 }
 
 
-@media (
-  max-width: 1000px
-) {
+@media (max-width: 1000px) {
   .timeline-main {
     grid-template-columns:
-      140px
-      120px
-      1fr
-      70px
-      24px;
+      140px 120px 1fr 70px 24px;
 
     gap: 12px;
   }
 }
 
 
-@media (
-  max-width: 760px
-) {
+@media (max-width: 760px) {
+
   .summary-grid,
   .detail-grid {
     grid-template-columns:
-      repeat(
-        2,
-        minmax(0, 1fr)
-      );
+      repeat(2,
+        minmax(0, 1fr));
   }
 
   .timeline-main {
     grid-template-columns:
-      1fr
-      auto;
+      1fr auto;
   }
 
   .timeline-kind,

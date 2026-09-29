@@ -247,6 +247,8 @@ def test_timeline_converts_to_stream_global_time(
     assert first["endMs"] == 50_000
 
     assert first["anchorMs"] == 35_000
+    
+    assert first["localAnchorMs"] == 35_000
 
     assert first["salienceScore"] == 0.96
 
@@ -268,6 +270,8 @@ def test_timeline_converts_to_stream_global_time(
     # score 更高的第二个 Highlight
     # 提供 anchor。
     assert second["anchorMs"] == 160_000
+    
+    assert second["localAnchorMs"] == 60_000
 
     assert second["salienceScore"] == 0.97
 
