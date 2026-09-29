@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
-  onMounted,
+  nextTick,
   ref,
   watch,
 } from 'vue'
@@ -12,18 +12,22 @@ import {
 
 import {
   getStream,
-  getStreamHighlights,
+  getStreamTimeline,
 } from '@/api/streams'
 
 import type {
-  DetectedHighlight,
   StreamDetail,
+  StreamTimeline,
+  TimelineItem,
 } from '@/types'
 
 import {
   formatDateTime,
   formatTimestamp,
 } from '@/utils/time'
+
+
+const IMPORTANT_THRESHOLD = 0.95
 
 
 const route =
@@ -35,12 +39,13 @@ const stream =
     | undefined
   >()
 
-const highlights =
+const timeline =
   ref<
-    DetectedHighlight[]
-  >([])
+    StreamTimeline
+    | undefined
+  >()
 
-const activeHighlightId =
+const activeItemId =
   ref<
     string
     | undefined
@@ -53,9 +58,37 @@ const error =
   ref('')
 
 
+const items =
+  computed(
+    () =>
+      [...(
+        timeline.value
+          ?.items
+        ?? []
+      )].sort(
+        (
+          first,
+          second,
+        ) =>
+          first.startMs
+          - second.startMs,
+      ),
+  )
+
+
 const duration =
   computed(
     () => {
+      if (
+        timeline.value
+          ?.durationMs
+      ) {
+        return (
+          timeline.value
+            .durationMs
+        )
+      }
+
       if (
         stream.value
           ?.durationMs
@@ -66,87 +99,120 @@ const duration =
         )
       }
 
-      return Math.max(
-        ...highlights.value.map(
-          (item) =>
-            item.endMs,
-        ),
-        1,
-      )
+      // A last reaction is not a reliable measure of the full stream length.
+      return null
     },
   )
 
+const durationLabel = computed(() =>
+  duration.value === null ? '时长暂未提供' : formatTimestamp(duration.value),
+)
 
-const sortedHighlights =
+// Only stagger crowded markers vertically; horizontal positions stay stream-global.
+const timelineMarkers = computed(() => {
+  if (!duration.value) return []
+  const laneEnds: number[] = []
+  return [...items.value].sort((a, b) => a.anchorMs - b.anchorMs).map((item) => {
+    const position = item.anchorMs / duration.value! * 100
+    let lane = laneEnds.findIndex((last) => position - last >= 3.6)
+    if (lane === -1) lane = laneEnds.length
+    laneEnds[lane] = position
+    return { item, lane }
+  })
+})
+
+const trackHeight = computed(() =>
+  Math.max(2, ...timelineMarkers.value.map(({ lane }) => lane + 1)) * 28,
+)
+
+
+const importantItems =
   computed(
     () =>
-      [...highlights.value]
-        .sort(
-          (
-            first,
-            second,
-          ) => {
-            const partCompare =
-              first.partId
-                .localeCompare(
-                  second.partId,
-                  undefined,
-                  {
-                    numeric: true,
-                  },
-                )
-
-            if (
-              partCompare
-              !== 0
-            ) {
-              return partCompare
-            }
-
-            return (
-              first.startMs
-              - second.startMs
-            )
-          },
-        ),
+      items.value.filter(
+        (item) =>
+          isImportant(
+            item,
+          ),
+      ),
   )
+
+
+function isImportant(
+  item: TimelineItem,
+): boolean {
+  return (
+    item.salienceScore
+    >= IMPORTANT_THRESHOLD
+  )
+}
 
 
 function formatScore(
   value: number,
 ): string {
-  return (
-    value
-      .toFixed(3)
-  )
+  return value.toFixed(3)
 }
 
 
-function percent(
+function timelinePosition(
   value: number,
 ): string {
-  return (
-    `${Math.round(
-      value * 100,
-    )}%`
+  if (
+    !duration.value
+  ) {
+    return '0%'
+  }
+
+  const ratio = Math.min(
+    1,
+    Math.max(
+      0,
+      value
+      / duration.value,
+    ),
   )
+
+  return `${ratio * 100}%`
 }
 
 
-function toggleHighlight(
-  highlightId: string,
+function toggleItem(
+  itemId: string,
 ) {
-  activeHighlightId.value =
-    activeHighlightId.value
-      === highlightId
+  activeItemId.value =
+    activeItemId.value
+      === itemId
       ? undefined
-      : highlightId
+      : itemId
 }
 
+
+async function focusItem(
+  itemId: string,
+) {
+  activeItemId.value =
+    itemId
+
+  await nextTick()
+
+  const card = document.getElementById(`timeline-${itemId}`)
+  card?.focus({ preventScroll: true })
+  card?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'center',
+    })
+}
+
+let loadVersion = 0
 
 async function loadTimeline() {
+  const version = ++loadVersion
   loading.value = true
   error.value = ''
+  stream.value = undefined
+  timeline.value = undefined
+  activeItemId.value = undefined
 
   try {
     const streamId =
@@ -163,16 +229,18 @@ async function loadTimeline() {
 
     const [
       streamResult,
-      highlightResults,
+      timelineResult,
     ] = await Promise.all([
       getStream(
         streamId,
       ),
 
-      getStreamHighlights(
+      getStreamTimeline(
         streamId,
       ),
     ])
+
+    if (version !== loadVersion) return
 
     if (!streamResult) {
       throw new Error(
@@ -180,16 +248,6 @@ async function loadTimeline() {
       )
     }
 
-    /**
-     * URL workspace 与 Stream owner
-     * 必须一致。
-     *
-     * 不允许：
-     *
-     * /v/aza/streams/<mikoto-stream>
-     *
-     * 静默展示跨 VTuber 数据。
-     */
     if (
       streamResult.vtuberId
       !== routeVtuberId
@@ -201,20 +259,26 @@ async function loadTimeline() {
       )
     }
 
+    if (timelineResult.streamId !== streamId) {
+      throw new Error('时间线响应与当前直播不一致，请重试。')
+    }
+
     stream.value =
       streamResult
 
-    highlights.value =
-      highlightResults
+    timeline.value =
+      timelineResult
 
-    activeHighlightId.value =
+    activeItemId.value =
       undefined
 
   } catch (reason) {
+    if (version !== loadVersion) return
     stream.value =
       undefined
 
-    highlights.value = []
+    timeline.value =
+      undefined
 
     error.value =
       reason instanceof Error
@@ -222,24 +286,14 @@ async function loadTimeline() {
         : '无法读取直播时间线'
 
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
-
-onMounted(
-  loadTimeline,
-)
-
-
 watch(
-  () =>
-    route.params
-      .streamId,
-
-  () => {
-    void loadTimeline()
-  },
+  () => [route.params.vtuberId, route.params.streamId],
+  () => { void loadTimeline() },
+  { immediate: true },
 )
 </script>
 
@@ -277,7 +331,7 @@ watch(
         <span
           class="eyebrow"
         >
-          STREAM ARCHIVE /
+          STREAM TIMELINE /
           {{
             stream.bvIds
               .join(' · ')
@@ -308,9 +362,10 @@ watch(
 
           <span>
             {{
-              highlights.length
+              formatTimestamp(
+                duration,
+              )
             }}
-            HIGHLIGHTS
           </span>
         </div>
       </div>
@@ -319,15 +374,11 @@ watch(
         class="archive-stamp"
       >
         <span>
-          AUDIENCE SIGNAL
+          TIMELINE
         </span>
 
         <strong>
-          {{
-            stream.hasDanmaku
-              ? 'DANMAKU READY'
-              : 'NO DANMAKU'
-          }}
+          STREAM GLOBAL
         </strong>
       </div>
     </header>
@@ -337,7 +388,7 @@ watch(
       v-if="loading"
       class="page-loading"
     >
-      正在读取真实直播档案…
+      正在构建整场直播时间线…
     </div>
 
 
@@ -345,12 +396,13 @@ watch(
       v-else-if="
         error
         || !stream
+        || !timeline
       "
       class="error-banner"
     >
       {{
         error
-        || '未找到该直播档案。'
+        || '未找到该直播时间线。'
       }}
     </p>
 
@@ -361,7 +413,7 @@ watch(
       <section
         class="
           content-panel
-          highlight-overview
+          timeline-overview
         "
       >
         <div
@@ -378,19 +430,36 @@ watch(
             </span>
 
             <h2>
-              Archive Summary
+              Timeline Overview
             </h2>
           </div>
 
           <span>
-            Highlight 是观众反应锚点，
-            不是主播事实。
+            基于弹幕观众反应信号，
+            暂不代表主播事实。
           </span>
         </div>
+
 
         <div
           class="summary-grid"
         >
+          <div
+            class="summary-item"
+          >
+            <span>
+              DURATION
+            </span>
+
+            <strong>
+              {{
+                formatTimestamp(
+                  duration,
+                )
+              }}
+            </strong>
+          </div>
+
           <div
             class="summary-item"
           >
@@ -409,14 +478,12 @@ watch(
             class="summary-item"
           >
             <span>
-              DANMAKU
+              TIMELINE ITEMS
             </span>
 
             <strong>
               {{
-                stream.hasDanmaku
-                  ? 'READY'
-                  : 'MISSING'
+                items.length
               }}
             </strong>
           </div>
@@ -425,39 +492,109 @@ watch(
             class="summary-item"
           >
             <span>
-              HIGHLIGHTS
+              IMPORTANT
             </span>
 
             <strong>
               {{
-                highlights.length
+                importantItems.length
               }}
             </strong>
           </div>
+        </div>
+
+
+        <div
+          v-if="items.length"
+          class="timeline-map"
+        >
+          <div
+            class="timeline-track"
+          >
+            <button
+              v-for="item in items"
+              :key="item.id"
+              type="button"
+              class="timeline-marker"
+              :class="{
+                important:
+                  isImportant(
+                    item,
+                  ),
+                active:
+                  activeItemId
+                  === item.id,
+              }"
+              :style="{
+                left:
+                  timelinePosition(
+                    item.anchorMs,
+                  ),
+              }"
+              :title="
+                `${formatTimestamp(
+                  item.anchorMs,
+                )} · ${formatScore(
+                  item.salienceScore,
+                )}`
+              "
+              @click="
+                focusItem(
+                  item.id,
+                )
+              "
+            ></button>
+          </div>
 
           <div
-            class="summary-item"
+            class="timeline-axis"
           >
             <span>
-              DETECTOR
+              00:00:00
             </span>
 
-            <strong>
+            <span>
               {{
-                highlights[0]
-                  ?.detectorVersion
-                ?? '—'
+                formatTimestamp(
+                  duration / 2,
+                )
               }}
-            </strong>
+            </span>
+
+            <span>
+              {{
+                formatTimestamp(
+                  duration,
+                )
+              }}
+            </span>
+          </div>
+
+          <div
+            class="timeline-legend"
+          >
+            <span>
+              <i></i>
+              普通反应节点
+            </span>
+
+            <span>
+              <i
+                class="important"
+              ></i>
+              重点节点
+              ≥
+              {{
+                IMPORTANT_THRESHOLD
+              }}
+            </span>
           </div>
         </div>
       </section>
 
 
       <section
-        class="
-          highlight-section
-        "
+        class="timeline-section"
       >
         <header
           class="section-heading"
@@ -470,80 +607,62 @@ watch(
             </span>
 
             <h2>
-              Highlight Timeline
+              Stream Timeline
             </h2>
           </div>
 
           <span>
             {{
-              highlights.length
+              items.length
             }}
-            个观众反应高峰
+            个时间线片段 ·
+            {{
+              importantItems.length
+            }}
+            个重点
           </span>
         </header>
 
 
         <div
-          v-if="
-            sortedHighlights
-              .length
-          "
-          class="highlight-list"
+          v-if="items.length"
+          class="timeline-list"
         >
           <article
-            v-for="
-              highlight
-              in sortedHighlights
-            "
+            v-for="item in items"
             :id="
-              highlight.id
+              `timeline-${item.id}`
             "
-            :key="
-              highlight.id
-            "
-            class="
-              highlight-card
-            "
+            :key="item.id"
+            class="timeline-card"
             :class="{
+              important:
+                isImportant(
+                  item,
+                ),
               active:
-                activeHighlightId
-                === highlight.id,
+                activeItemId
+                === item.id,
             }"
           >
             <button
-              class="
-                highlight-main
-              "
               type="button"
+              class="timeline-main"
               @click="
-                toggleHighlight(
-                  highlight.id,
+                toggleItem(
+                  item.id,
                 )
               "
             >
               <div
-                class="
-                  highlight-time
-                "
+                class="timeline-time"
               >
-                <span
-                  class="
-                    part-label
-                    mono
-                  "
-                >
-                  {{
-                    highlight.partId
-                  }}
-                </span>
-
                 <strong
                   class="mono"
                 >
                   {{
                     formatTimestamp(
-                      highlight
-                        .startMs,
+                      item.startMs,
                     )
                   }}
                 </strong>
@@ -552,8 +671,7 @@ watch(
                   →
                   {{
                     formatTimestamp(
-                      highlight
-                        .endMs,
+                      item.endMs,
                     )
                   }}
                 </span>
@@ -561,17 +679,49 @@ watch(
 
 
               <div
-                class="
-                  score-column
-                "
+                class="timeline-kind"
               >
-                <div
+                <span
+                  v-if="
+                    isImportant(
+                      item,
+                    )
+                  "
                   class="
-                    score-header
+                    importance-badge
+                    strong
                   "
                 >
+                  重点
+                </span>
+
+                <span
+                  v-else
+                  class="
+                    importance-badge
+                  "
+                >
+                  观众反应
+                </span>
+
+                <small>
+                  {{
+                    item
+                      .sourcePartIds
+                      .join(' · ')
+                  }}
+                </small>
+              </div>
+
+
+              <div
+                class="score-column"
+              >
+                <div
+                  class="score-header"
+                >
                   <span>
-                    SIGNAL SCORE
+                    SALIENCE
                   </span>
 
                   <strong
@@ -579,25 +729,20 @@ watch(
                   >
                     {{
                       formatScore(
-                        highlight
-                          .score,
+                        item
+                          .salienceScore,
                       )
                     }}
                   </strong>
                 </div>
 
                 <div
-                  class="
-                    score-track
-                  "
+                  class="score-track"
                 >
                   <i
                     :style="{
                       width:
-                        percent(
-                          highlight
-                            .score,
-                        ),
+                        `${item.salienceScore * 100}%`,
                     }"
                   ></i>
                 </div>
@@ -605,31 +750,28 @@ watch(
 
 
               <div
-                class="
-                  highlight-count
-                "
+                class="source-count"
               >
                 <strong>
                   {{
-                    highlight
-                      .danmakuCount
+                    item
+                      .sourceHighlightIds
+                      .length
                   }}
                 </strong>
 
                 <span>
-                  DANMAKU
+                  SIGNALS
                 </span>
               </div>
 
 
               <span
-                class="
-                  expand-indicator
-                "
+                class="expand-indicator"
               >
                 {{
-                  activeHighlightId
-                    === highlight.id
+                  activeItemId
+                    === item.id
                     ? '−'
                     : '+'
                 }}
@@ -639,28 +781,23 @@ watch(
 
             <div
               v-if="
-                activeHighlightId
-                === highlight.id
+                activeItemId
+                === item.id
               "
-              class="
-                highlight-detail
-              "
+              class="timeline-detail"
             >
               <div
-                class="
-                  metric-grid
-                "
+                class="detail-grid"
               >
                 <div>
                   <span>
-                    DENSITY
+                    ANCHOR
                   </span>
 
                   <strong>
                     {{
-                      formatScore(
-                        highlight
-                          .densityScore,
+                      formatTimestamp(
+                        item.anchorMs,
                       )
                     }}
                   </strong>
@@ -668,43 +805,44 @@ watch(
 
                 <div>
                   <span>
-                    REPETITION
+                    SOURCE PART
                   </span>
 
                   <strong>
                     {{
-                      formatScore(
-                        highlight
-                          .repetitionScore,
-                      )
+                      item
+                        .sourcePartIds
+                        .join(', ')
                     }}
                   </strong>
                 </div>
 
                 <div>
                   <span>
-                    REACTION
+                    MERGED SIGNALS
                   </span>
 
                   <strong>
                     {{
-                      formatScore(
-                        highlight
-                          .reactionScore,
-                      )
+                      item
+                        .sourceHighlightIds
+                        .length
                     }}
                   </strong>
                 </div>
 
                 <div>
                   <span>
-                    UNIQUE TEXT
+                    IMPORTANCE
                   </span>
 
                   <strong>
                     {{
-                      highlight
-                        .uniqueTextCount
+                      isImportant(
+                        item,
+                      )
+                        ? 'IMPORTANT'
+                        : 'NORMAL'
                     }}
                   </strong>
                 </div>
@@ -712,94 +850,20 @@ watch(
 
 
               <div
-                class="
-                  evidence-note
-                "
+                class="evidence-note"
               >
                 <strong>
                   Evidence boundary
                 </strong>
 
                 <p>
-                  当前只能确认这里出现了明显的
-                  观众集中反应。
-                  在获得 ASR 或其他高等级证据前，
-                  系统不能据此断言主播当时具体
-                  说了什么或做了什么。
+                  当前 Timeline Item
+                  来自弹幕密度、重复和反应信号。
+                  系统只能确认这里存在明显的观众集中反应；
+                  在加入 Topic Segmenter、ASR
+                  或更高等级证据前，
+                  不据此断言主播具体说了什么或做了什么。
                 </p>
-              </div>
-
-
-              <div
-                class="
-                  raw-stats
-                "
-              >
-                <span>
-                  peak
-                  <b>
-                    {{
-                      formatTimestamp(
-                        highlight
-                          .peakMs,
-                      )
-                    }}
-                  </b>
-                </span>
-
-                <span>
-                  repeat ratio
-                  <b>
-                    {{
-                      percent(
-                        highlight
-                          .repetitionRatio,
-                      )
-                    }}
-                  </b>
-                </span>
-
-                <span>
-                  reaction ratio
-                  <b>
-                    {{
-                      percent(
-                        highlight
-                          .reactionRatio,
-                      )
-                    }}
-                  </b>
-                </span>
-
-                <span>
-                  laugh
-                  <b>
-                    {{
-                      highlight
-                        .laughCount
-                    }}
-                  </b>
-                </span>
-
-                <span>
-                  question
-                  <b>
-                    {{
-                      highlight
-                        .questionCount
-                    }}
-                  </b>
-                </span>
-
-                <span>
-                  exclamation
-                  <b>
-                    {{
-                      highlight
-                        .exclamationCount
-                    }}
-                  </b>
-                </span>
               </div>
             </div>
           </article>
@@ -808,12 +872,10 @@ watch(
 
         <div
           v-else
-          class="
-            empty-panel
-          "
+          class="empty-panel"
         >
           该直播已有档案，
-          但尚未生成 Highlight。
+          但暂未检测到 Timeline Item。
         </div>
       </section>
     </template>
@@ -824,79 +886,267 @@ watch(
 <style scoped>
 .stream-facts {
   display: flex;
+  flex-wrap: wrap;
   gap: 18px;
   margin-top: 14px;
+
   color: var(--muted);
+
   font:
     600 .72rem/1
     ui-monospace,
     monospace;
+
   letter-spacing: .07em;
 }
 
-.highlight-overview {
+
+.timeline-overview {
   margin-top: 26px;
 }
 
+
 .summary-grid {
   display: grid;
+
   grid-template-columns:
     repeat(
       4,
       minmax(0, 1fr)
     );
+
   border-top:
     1px solid var(--line);
 }
 
+
 .summary-item {
   padding: 22px;
+
   border-right:
     1px solid var(--line);
 }
+
 
 .summary-item:last-child {
   border-right: 0;
 }
 
+
 .summary-item span {
   display: block;
+
   color: var(--faint);
+
   font:
     600 .66rem/1
     ui-monospace,
     monospace;
+
   letter-spacing: .12em;
 }
+
 
 .summary-item strong {
   display: block;
   margin-top: 10px;
-  color: var(--text-strong);
+
+  color:
+    var(--text-strong);
+
   font-size: 1.3rem;
 }
 
 
-.highlight-section {
+.timeline-map {
+  padding:
+    34px 24px 22px;
+
+  border-top:
+    1px solid var(--line);
+}
+
+
+.timeline-track {
+  position: relative;
+
+  height: 6px;
+
+  background:
+    var(--line);
+
+  border-radius:
+    999px;
+}
+
+
+.timeline-marker {
+  position: absolute;
+  top: 50%;
+
+  width: 9px;
+  height: 18px;
+
+  padding: 0;
+
+  transform:
+    translate(
+      -50%,
+      -50%
+    );
+
+  border:
+    2px solid
+    var(--surface);
+
+  border-radius:
+    999px;
+
+  background:
+    var(--muted);
+
+  cursor: pointer;
+}
+
+
+.timeline-marker:hover,
+.timeline-marker.active {
+  width: 12px;
+  height: 24px;
+
+  background:
+    var(--accent);
+}
+
+
+.timeline-marker.important {
+  width: 12px;
+  height: 26px;
+
+  background:
+    var(--accent);
+}
+
+
+.timeline-marker.important::after {
+  content: '';
+
+  position: absolute;
+
+  inset: -5px;
+
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 45%,
+      transparent
+    );
+
+  border-radius:
+    999px;
+}
+
+
+.timeline-axis {
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  margin-top: 14px;
+
+  color:
+    var(--faint);
+
+  font:
+    .66rem/1
+    ui-monospace,
+    monospace;
+}
+
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap:
+    12px 22px;
+
+  margin-top: 22px;
+
+  color:
+    var(--muted);
+
+  font-size:
+    .72rem;
+}
+
+
+.timeline-legend span {
+  display: flex;
+
+  gap: 8px;
+
+  align-items:
+    center;
+}
+
+
+.timeline-legend i {
+  width: 7px;
+  height: 12px;
+
+  border-radius:
+    999px;
+
+  background:
+    var(--muted);
+}
+
+
+.timeline-legend i.important {
+  width: 9px;
+  height: 16px;
+
+  background:
+    var(--accent);
+}
+
+
+.timeline-section {
   margin-top: 36px;
 }
 
-.highlight-list {
+
+.timeline-list {
   display: grid;
   gap: 10px;
 }
 
-.highlight-card {
+
+.timeline-card {
   overflow: hidden;
+
   border:
     1px solid var(--line);
+
   border-radius:
     var(--radius-md);
+
   background:
     var(--surface-glass);
 }
 
-.highlight-card.active {
+
+.timeline-card.important {
+  border-left:
+    3px solid
+    var(--accent);
+}
+
+
+.timeline-card.active {
   border-color:
     color-mix(
       in srgb,
@@ -905,22 +1155,26 @@ watch(
     );
 }
 
-.highlight-main {
+
+.timeline-main {
   width: 100%;
-  min-height: 86px;
+  min-height: 84px;
 
   display: grid;
+
   grid-template-columns:
-    220px
-    minmax(260px, 1fr)
-    110px
+    180px
+    150px
+    minmax(240px, 1fr)
+    90px
     32px;
 
-  gap: 22px;
+  gap: 20px;
+
   align-items: center;
 
   padding:
-    16px 20px;
+    15px 20px;
 
   color:
     var(--text);
@@ -931,73 +1185,112 @@ watch(
   border: 0;
 
   text-align: left;
+
   cursor: pointer;
 }
 
-.highlight-main:hover {
+
+.timeline-main:hover {
   background:
     var(--surface-hover);
 }
 
-.highlight-time {
-  display: grid;
-  grid-template-columns:
-    auto 1fr;
 
-  gap: 5px 12px;
-  align-items: center;
+.timeline-time {
+  display: grid;
+
+  gap: 5px;
 }
 
-.highlight-time strong {
+
+.timeline-time strong {
   color:
     var(--text-strong);
 
   font-size:
-    1.1rem;
+    1.08rem;
 }
 
-.highlight-time > span:last-child {
-  grid-column: 2;
+
+.timeline-time span {
   color:
     var(--muted);
 
   font-size:
-    .75rem;
+    .72rem;
 }
 
-.part-label {
-  grid-row:
-    1 / span 2;
 
+.timeline-kind {
+  display: grid;
+
+  justify-items:
+    start;
+
+  gap: 7px;
+}
+
+
+.timeline-kind small {
+  color:
+    var(--faint);
+
+  font:
+    .64rem/1
+    ui-monospace,
+    monospace;
+}
+
+
+.importance-badge {
   padding:
-    6px 8px;
+    5px 8px;
 
+  color:
+    var(--muted);
+
+  background:
+    var(--surface-deep);
+
+  border:
+    1px solid
+    var(--line);
+
+  border-radius:
+    999px;
+
+  font-size:
+    .67rem;
+}
+
+
+.importance-badge.strong {
   color:
     var(--accent);
 
   background:
     var(--accent-soft);
 
-  border:
-    1px solid
+  border-color:
     color-mix(
       in srgb,
-      var(--accent) 30%,
+      var(--accent) 35%,
       var(--line)
     );
-
-  border-radius:
-    6px;
 }
+
 
 .score-column {
   min-width: 0;
 }
 
+
 .score-header {
   display: flex;
+
   justify-content:
     space-between;
+
   gap: 16px;
 
   color:
@@ -1007,13 +1300,16 @@ watch(
     .68rem;
 }
 
+
 .score-header strong {
   color:
     var(--accent);
 }
 
+
 .score-track {
   height: 5px;
+
   margin-top: 10px;
 
   overflow: hidden;
@@ -1025,8 +1321,10 @@ watch(
     999px;
 }
 
+
 .score-track i {
   display: block;
+
   height: 100%;
 
   background:
@@ -1036,11 +1334,13 @@ watch(
     inherit;
 }
 
-.highlight-count {
+
+.source-count {
   text-align: right;
 }
 
-.highlight-count strong {
+
+.source-count strong {
   display: block;
 
   color:
@@ -1050,7 +1350,8 @@ watch(
     1.05rem;
 }
 
-.highlight-count span {
+
+.source-count span {
   display: block;
 
   margin-top: 5px;
@@ -1067,6 +1368,7 @@ watch(
     .08em;
 }
 
+
 .expand-indicator {
   color:
     var(--accent);
@@ -1077,9 +1379,9 @@ watch(
   text-align: center;
 }
 
-.highlight-detail {
-  padding:
-    20px;
+
+.timeline-detail {
+  padding: 20px;
 
   border-top:
     1px solid var(--line);
@@ -1088,7 +1390,8 @@ watch(
     var(--surface-deep);
 }
 
-.metric-grid {
+
+.detail-grid {
   display: grid;
 
   grid-template-columns:
@@ -1100,9 +1403,9 @@ watch(
   gap: 10px;
 }
 
-.metric-grid > div {
-  padding:
-    14px;
+
+.detail-grid > div {
+  padding: 14px;
 
   border:
     1px solid var(--line);
@@ -1114,7 +1417,8 @@ watch(
     var(--surface);
 }
 
-.metric-grid span {
+
+.detail-grid span {
   display: block;
 
   color:
@@ -1129,22 +1433,21 @@ watch(
     .08em;
 }
 
-.metric-grid strong {
+
+.detail-grid strong {
   display: block;
 
-  margin-top:
-    8px;
+  margin-top: 8px;
 
   color:
     var(--text-strong);
 }
 
-.evidence-note {
-  margin-top:
-    16px;
 
-  padding:
-    16px;
+.evidence-note {
+  margin-top: 16px;
+
+  padding: 16px;
 
   border-left:
     2px solid
@@ -1154,6 +1457,7 @@ watch(
     var(--accent-soft);
 }
 
+
 .evidence-note strong {
   color:
     var(--accent);
@@ -1162,9 +1466,9 @@ watch(
     .78rem;
 }
 
+
 .evidence-note p {
-  max-width:
-    780px;
+  max-width: 820px;
 
   margin:
     8px 0 0;
@@ -1179,33 +1483,46 @@ watch(
     1.7;
 }
 
-.raw-stats {
-  display: flex;
-  flex-wrap: wrap;
 
-  gap:
-    8px 18px;
+@media (
+  max-width: 1000px
+) {
+  .timeline-main {
+    grid-template-columns:
+      140px
+      120px
+      1fr
+      70px
+      24px;
 
-  margin-top:
-    16px;
-
-  color:
-    var(--faint);
-
-  font:
-    .68rem/1.5
-    ui-monospace,
-    monospace;
+    gap: 12px;
+  }
 }
 
-.raw-stats b {
-  margin-left:
-    5px;
 
-  color:
-    var(--text);
+@media (
+  max-width: 760px
+) {
+  .summary-grid,
+  .detail-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
 
-  font-weight:
-    600;
+  .timeline-main {
+    grid-template-columns:
+      1fr
+      auto;
+  }
+
+  .timeline-kind,
+  .score-column,
+  .source-count {
+    grid-column:
+      1 / -1;
+  }
 }
 </style>

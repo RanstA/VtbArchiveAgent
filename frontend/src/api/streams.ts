@@ -159,34 +159,11 @@ export async function getStreams(
 
 export async function getStream(
   id: string,
-): Promise<
-  StreamDetail | undefined
-> {
-  if (!useMockApi) {
-    return request<StreamDetail>(
-      `/streams/${id}`,
-    )
-  }
-
-  const stream =
-    mockStreams.find(
-      (item) =>
-        item.id === id,
-    )
-
-  if (!stream) {
-    return mockRequest(
-      undefined,
-    )
-  }
-
-  return mockRequest({
-    ...normalizeMockStream(
-      stream,
-    ),
-
-    partCount: 1,
-  })
+): Promise<StreamDetail> {
+  // The product Timeline always reads the real archive, including 404 errors.
+  return request<StreamDetail>(
+    `/streams/${encodeURIComponent(id)}`,
+  )
 }
 
 
@@ -219,19 +196,7 @@ export async function getStreamHighlights(
 export async function getStreamTimeline(
   id: string,
 ): Promise<StreamTimeline> {
-  if (!useMockApi) {
-    return request<StreamTimeline>(
-      `/streams/${id}/timeline`,
-    )
-  }
-
-  return mockRequest({
-    streamId: id,
-
-    durationMs: null,
-
-    mergeGapMs: 20_000,
-
-    items: [],
-  })
+  return request<StreamTimeline>(
+    `/streams/${encodeURIComponent(id)}/timeline`,
+  )
 }
