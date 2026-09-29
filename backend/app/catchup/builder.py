@@ -5,18 +5,11 @@ from app.catchup.descriptor import (
     StreamDescriptor,
     ImportantMomentDescriptor,
 )
-from app.event_pipeline.events import (
-    DEFAULT_MERGE_GAP_MS,
-    merge_highlights,
-)
-from app.repository.highlight_repo import (
-    list_highlights_by_stream,
-)
-from app.repository.stream_part_repo import (
-    list_stream_parts,
-)
 from app.repository.stream_repo import (
     get_stream_by_id,
+)
+from app.event_pipeline.timeline import (
+    build_stream_timeline,
 )
 
 
@@ -44,62 +37,25 @@ def build_stream_descriptor(
     if stream is None:
         return None
 
-    parts = list_stream_parts(
+    timeline = build_stream_timeline(
         connection=connection,
         stream_id=stream_id,
     )
 
-    known_part_ends = [
-        (int(part["start_offset_ms"]) + int(part["duration_ms"]))
-        for part in parts
-        if (part["duration_ms"] is not None)
-    ]
+    if timeline is None:
+        return None
 
-    duration_ms = max(
-        known_part_ends,
-        default=None,
-    )
-
-    highlights = list_highlights_by_stream(
-        connection=connection,
-        stream_id=stream_id,
-    )
-
-    part_by_id = {part["part_id"]: part for part in parts}
-
-    highlight_by_id = {highlight.id: highlight for highlight in highlights}
-
-    candidates = merge_highlights(
-        highlights,
-        merge_gap_ms=(DEFAULT_MERGE_GAP_MS),
-    )
-
-    important_moments: list[ImportantMomentDescriptor] = []
-
-    for candidate in candidates:
-        source_highlights = [
-            highlight_by_id[highlight_id]
-            for highlight_id in candidate.source_highlight_ids
-        ]
-
-        salience_score = max(highlight.score for highlight in source_highlights)
-
-        if salience_score < 0.95:
-            continue
-
-        part = part_by_id[candidate.part_id]
-
-        offset_ms = int(part["start_offset_ms"])
-
-        important_moments.append(
-            ImportantMomentDescriptor(
-                anchor_ms=(offset_ms + candidate.peak_ms),
-                local_anchor_ms=(candidate.peak_ms),
-                source_part_ids=[candidate.part_id],
-                salience_score=(salience_score),
-                source_highlight_ids=[highlight.id for highlight in source_highlights],
-            )
+    important_moments = [
+        ImportantMomentDescriptor(
+            anchor_ms=(item.anchor_ms),
+            local_anchor_ms=(item.local_anchor_ms),
+            source_part_ids=(item.source_part_ids),
+            salience_score=(item.salience_score),
+            source_highlight_ids=(item.source_highlight_ids),
         )
+        for item in timeline.items
+        if item.salience_score >= 0.95
+    ]
 
     return StreamDescriptor(
         stream_id=stream["id"],
@@ -107,7 +63,7 @@ def build_stream_descriptor(
         live_time=datetime.fromisoformat(
             stream["live_time"],
         ),
-        duration_ms=duration_ms,
+        duration_ms=timeline.duration_ms,
         bv_ids=stream["bv_ids"],
         important_moments=important_moments,
     )

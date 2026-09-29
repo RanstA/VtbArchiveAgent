@@ -30,13 +30,8 @@ from app.repository.stream_repo import (
     get_stream_by_id,
     list_streams,
 )
-
-from app.domain.event import (
-    make_event_id,
-)
-from app.event_pipeline.events import (
-    DEFAULT_MERGE_GAP_MS,
-    merge_highlights,
+from app.event_pipeline.timeline import (
+    build_stream_timeline,
 )
 
 router = APIRouter(
@@ -95,6 +90,7 @@ class HighlightResponse(BaseModel):
 
     detectorVersion: str
 
+
 class TimelineItemResponse(BaseModel):
     id: str
 
@@ -105,13 +101,14 @@ class TimelineItemResponse(BaseModel):
     startMs: int
     endMs: int
     anchorMs: int
-    
+
     localAnchorMs: int
 
     salienceScore: float
 
     sourceHighlightIds: list[str]
-    
+
+
 class TimelineResponse(BaseModel):
     streamId: str
 
@@ -119,9 +116,8 @@ class TimelineResponse(BaseModel):
 
     mergeGapMs: int
 
-    items: list[
-        TimelineItemResponse
-    ]
+    items: list[TimelineItemResponse]
+
 
 def normalize_live_time(
     value: str,
@@ -307,218 +303,38 @@ def get_stream_highlights(
 def get_stream_timeline(
     stream_id: str,
 ):
-    """
-    当前 Timeline MVP。
-
-    Highlight / EventCandidate 仍然使用
-    Part-local 时间。
-
-    这里在 Product Serving 边界统一转换为
-    Stream-global 时间：
-
-        global_ms
-        =
-        part.start_offset_ms
-        +
-        local_ms
-
-    当前 Timeline Item 只代表
-    audience-reaction 高光片段，
-
-    尚不是完整的 semantic Event。
-    """
-
-    connection = connect_db(
-        settings.database_path
-    )
+    connection = connect_db(settings.database_path)
 
     try:
-        stream = get_stream_by_id(
+        timeline = build_stream_timeline(
             connection=connection,
             stream_id=stream_id,
         )
 
-        if stream is None:
+        if timeline is None:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "Stream not found"
-                ),
+                detail=("Stream not found"),
             )
-
-        parts = list_stream_parts(
-            connection=connection,
-            stream_id=stream_id,
-        )
-
-        highlights = (
-            list_highlights_by_stream(
-                connection=connection,
-                stream_id=stream_id,
-            )
-        )
-
-        part_by_id = {
-            part["part_id"]: part
-            for part in parts
-        }
-
-        highlight_by_id = {
-            highlight.id: highlight
-            for highlight in highlights
-        }
-
-        candidates = merge_highlights(
-            highlights,
-            merge_gap_ms=(
-                DEFAULT_MERGE_GAP_MS
-            ),
-        )
-
-        items: list[
-            TimelineItemResponse
-        ] = []
-
-        for candidate in candidates:
-            part = part_by_id.get(
-                candidate.part_id
-            )
-
-            if part is None:
-                raise RuntimeError(
-                    "Timeline candidate "
-                    "references unknown part: "
-                    f"{candidate.part_id}"
-                )
-
-            offset_ms = int(
-                part[
-                    "start_offset_ms"
-                ]
-            )
-
-            start_ms = (
-                offset_ms
-                + candidate.start_ms
-            )
-
-            end_ms = (
-                offset_ms
-                + candidate.end_ms
-            )
-
-            anchor_ms = (
-                offset_ms
-                + candidate.peak_ms
-            )
-
-            source_highlights = [
-                highlight_by_id[
-                    highlight_id
-                ]
-                for highlight_id
-                in (
-                    candidate
-                    .source_highlight_ids
-                )
-            ]
-
-            salience_score = max(
-                highlight.score
-                for highlight
-                in source_highlights
-            )
-
-            items.append(
-                TimelineItemResponse(
-                    id=make_event_id(
-                        stream_id=(
-                            stream_id
-                        ),
-                        start_ms=(
-                            start_ms
-                        ),
-                        end_ms=end_ms,
-                    ),
-                    streamId=stream_id,
-                    sourcePartIds=[
-                        candidate.part_id
-                    ],
-                    startMs=start_ms,
-                    endMs=end_ms,
-                    anchorMs=(
-                        anchor_ms
-                    ),
-                    localAnchorMs=candidate.peak_ms,
-                    salienceScore=(
-                        salience_score
-                    ),
-                    sourceHighlightIds=[
-                        (
-                            highlight.id
-                        )
-                        for highlight
-                        in source_highlights
-                    ],
-                )
-            )
-
-        items.sort(
-            key=lambda item: (
-                item.startMs,
-                item.endMs,
-            )
-        )
-
-        known_part_ends = [
-            (
-                int(
-                    part[
-                        "start_offset_ms"
-                    ]
-                )
-                + int(
-                    part[
-                        "duration_ms"
-                    ]
-                )
-            )
-            for part in parts
-            if (
-                part[
-                    "duration_ms"
-                ]
-                is not None
-            )
-        ]
-
-        timeline_end = max(
-            (
-                item.endMs
-                for item in items
-            ),
-            default=0,
-        )
-
-        duration_ms = max(
-            [
-                *known_part_ends,
-                timeline_end,
-            ],
-            default=0,
-        )
 
         return TimelineResponse(
-            streamId=stream_id,
-            durationMs=(
-                duration_ms
-                if duration_ms > 0
-                else None
-            ),
-            mergeGapMs=(
-                DEFAULT_MERGE_GAP_MS
-            ),
-            items=items,
+            streamId=(timeline.stream_id),
+            durationMs=(timeline.duration_ms),
+            mergeGapMs=(timeline.merge_gap_ms),
+            items=[
+                TimelineItemResponse(
+                    id=item.id,
+                    streamId=(item.stream_id),
+                    sourcePartIds=(item.source_part_ids),
+                    startMs=(item.start_ms),
+                    endMs=(item.end_ms),
+                    anchorMs=(item.anchor_ms),
+                    localAnchorMs=(item.local_anchor_ms),
+                    salienceScore=(item.salience_score),
+                    sourceHighlightIds=(item.source_highlight_ids),
+                )
+                for item in timeline.items
+            ],
         )
 
     finally:
