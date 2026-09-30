@@ -128,20 +128,15 @@ def build_stream_timeline(
     """
     为一场 Stream 构建统一 Timeline。
 
-    优先级：
+    已经生成的 Semantic Event 优先展示；
+    尚未语义化的 Highlight Candidate
+    继续作为 fallback 展示。
 
-        Persisted Unified Event
-        -> Timeline
+    因此支持：
 
-    如果当前 Stream 还没有生成 Event：
-
-        Highlight
-        -> Merge
-        -> Stream-global Timeline
-
-    这样旧数据仍然可以正常工作，
-    API / Catch-up / Agent 也无需知道
-    Timeline 底层使用了哪种算法。
+        Highlight Timeline
+        -> Hybrid Timeline
+        -> Semantic Timeline
     """
 
     stream = get_stream_by_id(
@@ -157,8 +152,14 @@ def build_stream_timeline(
         stream_id=stream_id,
     )
 
+    part_by_id = {part["part_id"]: part for part in parts}
+
+    items: list[TimelineItem] = []
+
+    covered_highlight_ids: set[str] = set()
+
     # ==========================================
-    # 1. 优先使用持久化 Unified Events
+    # 1. Persisted Unified Events
     # ==========================================
 
     events = list_events_by_stream(
@@ -166,95 +167,68 @@ def build_stream_timeline(
         stream_id=stream_id,
     )
 
-    if events:
-        part_by_id = {part["part_id"]: part for part in parts}
+    for event in events:
+        anchor_part = None
 
-        items: list[TimelineItem] = []
+        for part_id in event.source_part_ids:
+            part = part_by_id.get(part_id)
 
-        for event in events:
-            anchor_part = None
+            if part is None:
+                continue
 
-            for part_id in event.source_part_ids:
-                part = part_by_id.get(part_id)
+            offset_ms = int(part["start_offset_ms"])
 
-                if part is None:
-                    continue
-
-                offset_ms = int(part["start_offset_ms"])
-
-                duration_ms = (
-                    int(part["duration_ms"])
-                    if (part["duration_ms"] is not None)
-                    else None
-                )
-
-                anchor_is_in_part = event.anchor_ms >= offset_ms and (
-                    duration_ms is None or event.anchor_ms < (offset_ms + duration_ms)
-                )
-
-                if anchor_is_in_part:
-                    anchor_part = part
-                    break
-
-            if anchor_part is None:
-                raise RuntimeError(
-                    "Event anchor does not " "belong to any source part: " f"{event.id}"
-                )
-
-            anchor_offset_ms = int(anchor_part["start_offset_ms"])
-
-            items.append(
-                TimelineItem(
-                    id=event.id,
-                    stream_id=(event.stream_id),
-                    source_part_ids=(event.source_part_ids),
-                    start_ms=(event.start_ms),
-                    end_ms=(event.end_ms),
-                    anchor_ms=(event.anchor_ms),
-                    local_anchor_ms=(event.anchor_ms - anchor_offset_ms),
-                    salience_score=(event.salience_score),
-                    title=(event.title),
-                    summary=(event.summary),
-                    keywords=(event.keywords),
-                    entities=(event.entities),
-                    evidence_refs=[
-                        ("highlight:" f"{highlight_id}")
-                        for highlight_id in event.source_highlight_ids
-                    ],
-                    source_highlight_ids=(event.source_highlight_ids),
-                )
+            duration_ms = (
+                int(part["duration_ms"]) if part["duration_ms"] is not None else None
             )
 
-        items.sort(
-            key=lambda item: (
-                item.start_ms,
-                item.end_ms,
+            anchor_is_in_part = event.anchor_ms >= offset_ms and (
+                duration_ms is None or event.anchor_ms < offset_ms + duration_ms
+            )
+
+            if anchor_is_in_part:
+                anchor_part = part
+                break
+
+        if anchor_part is None:
+            raise RuntimeError(
+                "Event anchor does not " "belong to any source part: " f"{event.id}"
+            )
+
+        anchor_offset_ms = int(anchor_part["start_offset_ms"])
+
+        items.append(
+            TimelineItem(
+                id=event.id,
+                stream_id=event.stream_id,
+                source_part_ids=(event.source_part_ids),
+                start_ms=event.start_ms,
+                end_ms=event.end_ms,
+                anchor_ms=event.anchor_ms,
+                local_anchor_ms=(event.anchor_ms - anchor_offset_ms),
+                salience_score=(event.salience_score),
+                title=event.title,
+                summary=event.summary,
+                keywords=event.keywords,
+                entities=event.entities,
+                evidence_refs=[
+                    ("highlight:" f"{highlight_id}")
+                    for highlight_id in event.source_highlight_ids
+                ],
+                source_highlight_ids=(event.source_highlight_ids),
             )
         )
 
-        duration_ms = _compute_stream_duration(
-            parts=parts,
-            items=items,
-        )
-
-        return StreamTimeline(
-            stream_id=stream_id,
-            duration_ms=duration_ms,
-            merge_gap_ms=(DEFAULT_MERGE_GAP_MS),
-            items=items,
-        )
+        covered_highlight_ids.update(event.source_highlight_ids)
 
     # ==========================================
-    # 2. 没有 Unified Event 时，
-    #    fallback 到旧 Highlight Timeline
+    # 2. Highlight fallback
     # ==========================================
 
     highlights = list_highlights_by_stream(
         connection=connection,
         stream_id=stream_id,
     )
-
-    part_by_id = {part["part_id"]: part for part in parts}
 
     highlight_by_id = {highlight.id: highlight for highlight in highlights}
 
@@ -263,9 +237,13 @@ def build_stream_timeline(
         merge_gap_ms=(DEFAULT_MERGE_GAP_MS),
     )
 
-    items: list[TimelineItem] = []
-
     for candidate in candidates:
+        # 如果 Candidate 已经被某个
+        # Semantic Event 覆盖，
+        # 就不要再重复展示 fallback。
+        if covered_highlight_ids.intersection(candidate.source_highlight_ids):
+            continue
+
         part = part_by_id.get(candidate.part_id)
 
         if part is None:

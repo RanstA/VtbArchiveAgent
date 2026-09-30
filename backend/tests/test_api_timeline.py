@@ -372,11 +372,19 @@ def test_timeline_prefers_persisted_events(
         # 一旦 persisted Event 存在，
         # Timeline 应优先使用 Event，
         # 所以这里只剩 1 个。
-        assert len(timeline.items) == 1
+        # persisted Event 只替代它覆盖的 fallback，
+        # 其他尚未语义化的 TimelineItem 仍然保留。
+        assert len(timeline.items) == 2
 
-        item = timeline.items[0]
+        semantic_items = [
+            item
+            for item in timeline.items
+            if item.id == event.id
+        ]
 
-        assert item.id == event.id
+        assert len(semantic_items) == 1
+
+        item = semantic_items[0]
 
         assert item.title == ("神秘园环节")
 
@@ -402,6 +410,23 @@ def test_timeline_prefers_persisted_events(
         assert item.source_highlight_ids == [
             p1_second.id,
         ]
+        
+        fallback_items = [
+            item
+            for item in timeline.items
+            if item.id != event.id
+        ]
+
+        assert len(fallback_items) == 1
+
+        fallback = fallback_items[0]
+
+        assert fallback.source_part_ids == [
+            "p0",
+        ]
+
+        assert fallback.title is None
+        assert fallback.summary is None
 
     finally:
         connection.close()
@@ -474,9 +499,17 @@ def test_timeline_api_exposes_event_semantics(
 
     payload = response.json()
 
-    assert len(payload["items"]) == 1
+    assert len(payload["items"]) == 2
 
-    item = payload["items"][0]
+    semantic_items = [
+        item
+        for item in payload["items"]
+        if item["title"] == "神秘园环节"
+    ]
+
+    assert len(semantic_items) == 1
+
+    item = semantic_items[0]
 
     assert item["title"] == "神秘园环节"
 
