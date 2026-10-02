@@ -196,6 +196,35 @@ def init_db(
         );
 
 
+        CREATE TABLE IF NOT EXISTS transcript_segments (
+            id TEXT PRIMARY KEY,
+
+            stream_id TEXT NOT NULL,
+            part_id TEXT NOT NULL,
+
+            start_ms INTEGER NOT NULL,
+            end_ms INTEGER NOT NULL,
+
+            raw_text TEXT NOT NULL,
+            text TEXT NOT NULL,
+
+            source TEXT NOT NULL,
+
+            CHECK (start_ms >= 0),
+            CHECK (end_ms > start_ms),
+
+            FOREIGN KEY (
+                stream_id,
+                part_id
+            )
+                REFERENCES stream_parts(
+                    stream_id,
+                    part_id
+                )
+                ON DELETE CASCADE
+        );
+
+
         CREATE TABLE IF NOT EXISTS highlights (
             id TEXT PRIMARY KEY,
 
@@ -364,6 +393,15 @@ def init_db(
         ON danmaku(
             stream_part_id,
             timestamp_ms
+        );
+
+
+        CREATE INDEX IF NOT EXISTS
+            idx_transcript_segments_stream_part_time
+        ON transcript_segments(
+            stream_id,
+            part_id,
+            start_ms
         );
 
 
