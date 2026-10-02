@@ -326,6 +326,106 @@ def init_db(
                 )
                 ON DELETE CASCADE
         );
+        
+        CREATE TABLE IF NOT EXISTS reaction_matches (
+            id TEXT PRIMARY KEY,
+
+            stream_id TEXT NOT NULL,
+            part_id TEXT NOT NULL,
+
+            highlight_id TEXT NOT NULL UNIQUE,
+
+            matcher_version TEXT NOT NULL,
+
+            FOREIGN KEY (
+                stream_id,
+                part_id
+            )
+                REFERENCES stream_parts(
+                    stream_id,
+                    part_id
+                )
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (
+                highlight_id
+            )
+                REFERENCES highlights(id)
+                ON DELETE CASCADE
+        );
+        
+        
+        CREATE TABLE IF NOT EXISTS reaction_match_transcripts (
+            reaction_match_id TEXT NOT NULL,
+            transcript_segment_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+
+            PRIMARY KEY (
+                reaction_match_id,
+                transcript_segment_id
+            ),
+
+            UNIQUE (
+                reaction_match_id,
+                position
+            ),
+
+            CHECK (
+                position >= 0
+            ),
+
+            FOREIGN KEY (
+                reaction_match_id
+            )
+                REFERENCES reaction_matches(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (
+                transcript_segment_id
+            )
+                REFERENCES transcript_segments(id)
+                ON DELETE CASCADE
+        );
+        
+        CREATE TABLE IF NOT EXISTS reaction_match_danmaku (
+            reaction_match_id TEXT NOT NULL,
+            danmaku_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+
+            PRIMARY KEY (
+                reaction_match_id,
+                danmaku_id
+            ),
+
+            UNIQUE (
+                reaction_match_id,
+                position
+            ),
+
+            CHECK (
+                position >= 0
+            ),
+
+            FOREIGN KEY (
+                reaction_match_id
+            )
+                REFERENCES reaction_matches(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (
+                danmaku_id
+            )
+                REFERENCES danmaku(id)
+                ON DELETE CASCADE
+        );
+        
+        CREATE INDEX IF NOT EXISTS
+            idx_reaction_matches_stream_part
+        ON reaction_matches(
+            stream_id,
+            part_id
+        );
+
 
 
         CREATE TABLE IF NOT EXISTS events (
