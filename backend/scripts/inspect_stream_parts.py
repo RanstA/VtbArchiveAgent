@@ -42,7 +42,7 @@ def main() -> None:
 
         print("弹幕数量:", len(danmaku))
         for item in danmaku[:3]:
-            print(item.part_id, item.timestamp_ms, item.text)
+            print(item["part_id"], item["timestamp_ms"], item["text"])
 
 
 if __name__ == "__main__":

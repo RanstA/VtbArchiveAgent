@@ -6,9 +6,6 @@ from pathlib import Path
 from app.ingestion.media_probe import probe_duration_ms
 
 from app.domain.source.vtuber import Vtuber
-from app.domain.danmaku import (
-    Danmaku,
-)
 from app.domain.source.stream import (
     Stream,
     StreamStatus,
@@ -396,7 +393,7 @@ class LocalSource:
             file_groups=file_groups,
         )
 
-        danmaku: list[Danmaku] = []
+        danmaku: list[dict[str, str | int]] = []
 
         for part in parts:
             if part.danmaku_path is None:

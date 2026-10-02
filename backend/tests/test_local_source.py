@@ -87,7 +87,7 @@ def test_local_source_loads_nested_layout(
 
     assert len(bundle.danmaku) == 2
 
-    assert all(item.part_id == "p0" for item in bundle.danmaku)
+    assert all(item["part_id"] == "p0" for item in bundle.danmaku)
 
 
 def test_local_source_loads_flat_layout(
@@ -120,7 +120,7 @@ def test_local_source_loads_flat_layout(
 
     assert len(bundle.danmaku) == 2
 
-    assert all(item.stream_id == stream.id for item in bundle.danmaku)
+    assert all(item["stream_id"] == stream.id for item in bundle.danmaku)
 
 
 def test_local_source_assigns_stable_part_ids(
@@ -193,7 +193,7 @@ def test_local_source_assigns_stable_part_ids(
         3_133_000,
     ]
 
-    assert {item.part_id for item in bundle.danmaku} == {
+    assert {item["part_id"] for item in bundle.danmaku} == {
         "p0",
         "p1",
     }

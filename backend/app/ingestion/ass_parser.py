@@ -2,14 +2,12 @@ from pathlib import Path
 
 import pysubs2
 
-from app.domain.danmaku import Danmaku
-
 
 def parse_ass(
-    path: Path, 
+    path: Path,
     stream_id: str,
-    part_id: str
-) -> list[Danmaku]:
+    part_id: str,
+) -> list[dict[str, str | int]]:
     subs = pysubs2.load(str(path))
 
     results = []
@@ -22,13 +20,13 @@ def parse_ass(
             continue
 
         results.append(
-            Danmaku(
-                stream_id=stream_id,
-                timestamp_ms=line.start,
-                raw_text=raw_text,
-                text=text,
-                part_id=part_id
-            )
+            {
+                "stream_id": stream_id,
+                "part_id": part_id,
+                "timestamp_ms": line.start,
+                "raw_text": raw_text,
+                "text": text,
+            }
         )
 
     return results

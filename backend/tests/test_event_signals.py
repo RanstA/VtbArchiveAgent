@@ -1,4 +1,4 @@
-from app.domain.danmaku import Danmaku
+from app.domain.evidence.danmaku import Danmaku
 from app.domain.signal_window import SignalWindow
 from app.event_pipeline.signals import (
     build_stream_signal_windows,
@@ -41,6 +41,7 @@ def make_danmaku(
     part_id: str = "part-1",
 ) -> Danmaku:
     return Danmaku(
+        id=timestamp_ms + 1,
         stream_id=stream_id,
         part_id=part_id,
         timestamp_ms=timestamp_ms,

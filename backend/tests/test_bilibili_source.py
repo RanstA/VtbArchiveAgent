@@ -190,25 +190,26 @@ def test_bilibili_source_maps_to_domain():
     assert [part.page for part in bundle.parts] == [1, 2]
     assert [part.cid for part in bundle.parts] == ["1001", "1002"]
 
+    assert bundle.danmaku[2]["timestamp_ms"] == 3000
+
     assert len(
         bundle.danmaku
     ) == 3
 
+    assert all(isinstance(item, dict) and "id" not in item for item in bundle.danmaku)
+
     assert (
-        bundle.danmaku[0]
-        .timestamp_ms
+        bundle.danmaku[0]["timestamp_ms"]
         == 1000
     )
 
     assert (
-        bundle.danmaku[0]
-        .raw_text
+        bundle.danmaku[0]["raw_text"]
         == "晚上好"
     )
 
     assert (
-        bundle.danmaku[0]
-        .text
+        bundle.danmaku[0]["text"]
         == "晚上好"
     )
 
@@ -239,7 +240,7 @@ def test_bilibili_source_keeps_parts_separate():
     bundle = source.load()
 
     part_ids = [
-        item.part_id
+        item["part_id"]
         for item
         in bundle.danmaku
     ]

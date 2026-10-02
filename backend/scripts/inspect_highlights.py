@@ -3,7 +3,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from app.domain.danmaku import Danmaku
+from app.domain.evidence.danmaku import Danmaku
 from app.domain.signal_window import SignalWindow
 from app.event_pipeline.signals import (
     build_stream_signal_windows,
@@ -921,4 +921,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    

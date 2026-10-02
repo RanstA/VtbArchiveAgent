@@ -29,12 +29,12 @@ def main() -> None:
 
     print("弹幕数量:", len(danmaku))
     for item in danmaku[:10]:
-        print(item.part_id, item.timestamp_ms, item.text)
+        print(item["part_id"], item["timestamp_ms"], item["text"])
 
-    assert all(item.timestamp_ms >= 0 for item in danmaku)
-    assert all(item.text.strip() for item in danmaku)
-    assert all(r"{\c" not in item.text for item in danmaku)
-    assert all(r"\move" not in item.text for item in danmaku)
+    assert all(item["timestamp_ms"] >= 0 for item in danmaku)
+    assert all(item["text"].strip() for item in danmaku)
+    assert all(r"{\c" not in item["text"] for item in danmaku)
+    assert all(r"\move" not in item["text"] for item in danmaku)
 
 
 if __name__ == "__main__":

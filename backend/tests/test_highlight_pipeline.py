@@ -1,9 +1,6 @@
 import sqlite3
 from datetime import datetime
 
-from app.domain.danmaku import (
-    Danmaku,
-)
 from app.domain.highlight import (
     Highlight,
     make_highlight_id,
@@ -76,7 +73,7 @@ def make_stream() -> Stream:
 
 def make_burst_danmaku(
     stream_id: str,
-) -> list[Danmaku]:
+) -> list[dict[str, str | int]]:
     """
     构造一个明显的局部高光：
 
@@ -94,9 +91,7 @@ def make_burst_danmaku(
     成为明显局部峰。
     """
 
-    result: list[
-        Danmaku
-    ] = []
+    result: list[dict[str, str | int]] = []
 
     for index in range(5):
         text = (
@@ -104,7 +99,7 @@ def make_burst_danmaku(
         )
 
         result.append(
-            Danmaku(
+            dict(
                 stream_id=stream_id,
                 part_id="p0",
                 timestamp_ms=(
@@ -118,7 +113,7 @@ def make_burst_danmaku(
 
     for index in range(30):
         result.append(
-            Danmaku(
+            dict(
                 stream_id=stream_id,
                 part_id="p0",
                 timestamp_ms=(
@@ -132,7 +127,7 @@ def make_burst_danmaku(
 
     for index in range(30):
         result.append(
-            Danmaku(
+            dict(
                 stream_id=stream_id,
                 part_id="p0",
                 timestamp_ms=(
@@ -150,7 +145,7 @@ def make_burst_danmaku(
         )
 
         result.append(
-            Danmaku(
+            dict(
                 stream_id=stream_id,
                 part_id="p0",
                 timestamp_ms=(

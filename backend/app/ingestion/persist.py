@@ -1,9 +1,6 @@
 import sqlite3
 
 from app.domain.source.stream import StreamStatus
-from app.domain.danmaku import (
-    Danmaku,
-)
 from app.ingestion.source import (
     ArchiveBundle,
 )
@@ -69,7 +66,7 @@ def _validate_archive_bundle(
 
     for danmaku in bundle.danmaku:
         if (
-            danmaku.stream_id
+            danmaku["stream_id"]
             != bundle.stream.id
         ):
             raise ValueError(
@@ -78,13 +75,13 @@ def _validate_archive_bundle(
             )
 
         if (
-            danmaku.part_id
+            danmaku["part_id"]
             not in part_ids
         ):
             raise ValueError(
                 "danmaku references unknown "
                 "part_id: "
-                f"{danmaku.part_id}"
+                f"{danmaku['part_id']}"
             )
 
 
@@ -92,11 +89,11 @@ def _group_danmaku_by_part(
     bundle: ArchiveBundle,
 ) -> dict[
     str,
-    list[Danmaku],
+    list[dict[str, str | int]],
 ]:
     result: dict[
         str,
-        list[Danmaku],
+        list[dict[str, str | int]],
     ] = {
         part.part_id: []
         for part
@@ -105,7 +102,7 @@ def _group_danmaku_by_part(
 
     for item in bundle.danmaku:
         result[
-            item.part_id
+            item["part_id"]
         ].append(
             item
         )

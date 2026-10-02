@@ -56,15 +56,15 @@ def get_top_texts(
     tuple[str, int]
 ]:
     texts = [
-        item.text.strip()
+        item["text"].strip()
         for item in danmaku
         if (
-            item.part_id
+            item["part_id"]
             == part_id
             and start_ms
-            <= item.timestamp_ms
+            <= item["timestamp_ms"]
             < end_ms
-            and item.text.strip()
+            and item["text"].strip()
         )
     ]
 
@@ -226,7 +226,7 @@ def main() -> None:
             for item
             in bundle.danmaku
             if (
-                item.part_id
+                item["part_id"]
                 == part.part_id
             )
         )

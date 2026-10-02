@@ -4,9 +4,6 @@ from datetime import datetime
 import pytest
 
 import app.ingestion.persist as persist_module
-from app.domain.danmaku import (
-    Danmaku,
-)
 from app.domain.highlight import (
     Highlight,
     make_highlight_id,
@@ -133,7 +130,7 @@ def make_bundle(
     )
 
     danmaku = [
-        Danmaku(
+        dict(
             stream_id=stream.id,
             part_id="p0",
             timestamp_ms=(

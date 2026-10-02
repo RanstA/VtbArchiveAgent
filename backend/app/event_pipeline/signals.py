@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 
-from app.domain.danmaku import Danmaku
+from app.domain.evidence.danmaku import Danmaku
 from app.domain.signal_window import SignalWindow
 
 

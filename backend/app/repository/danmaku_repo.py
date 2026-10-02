@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.domain.danmaku import (
+from app.domain.evidence.danmaku import (
     Danmaku,
 )
 
@@ -8,10 +8,17 @@ from app.domain.danmaku import (
 def insert_danmaku_batch(
     connection: sqlite3.Connection,
     stream_part_id: int,
-    danmaku: list[Danmaku],
+    danmaku: list[dict[str, str | int]],
 ) -> None:
     if not danmaku:
         return
+
+    if any(
+        not isinstance(item["timestamp_ms"], int)
+        or item["timestamp_ms"] < 0
+        for item in danmaku
+    ):
+        raise ValueError("timestamp_ms must be a non-negative integer")
 
     connection.executemany(
         """
@@ -26,9 +33,9 @@ def insert_danmaku_batch(
         [
             (
                 stream_part_id,
-                item.timestamp_ms,
-                item.raw_text,
-                item.text,
+                item["timestamp_ms"],
+                item["raw_text"],
+                item["text"],
             )
             for item in danmaku
         ],
@@ -44,25 +51,32 @@ def list_danmaku_by_stream_part(
     rows = connection.execute(
         """
         SELECT
-            timestamp_ms,
-            raw_text,
-            text
-        FROM danmaku
-        WHERE stream_part_id = ?
-        ORDER BY timestamp_ms ASC
+            d.id,
+            d.timestamp_ms,
+            d.raw_text,
+            d.text
+        FROM danmaku AS d
+        JOIN stream_parts AS sp ON sp.id = d.stream_part_id
+        WHERE d.stream_part_id = ?
+          AND sp.stream_id = ?
+          AND sp.part_id = ?
+        ORDER BY d.timestamp_ms ASC, d.id ASC
         """,
         (
             stream_part_id,
+            stream_id,
+            part_id,
         ),
     ).fetchall()
 
     return [
         Danmaku(
+            id=row[0],
             stream_id=stream_id,
             part_id=part_id,
-            timestamp_ms=row[0],
-            raw_text=row[1],
-            text=row[2],
+            timestamp_ms=row[1],
+            raw_text=row[2],
+            text=row[3],
         )
         for row in rows
     ]

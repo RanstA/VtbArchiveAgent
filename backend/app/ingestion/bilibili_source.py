@@ -6,7 +6,6 @@ from datetime import (
 )
 from typing import Literal
 
-from app.domain.danmaku import Danmaku
 from app.domain.source.stream import (
     Stream,
     StreamStatus,
@@ -300,9 +299,7 @@ class BilibiliSource:
             StreamPart
         ] = []
 
-        danmaku: list[
-            Danmaku
-        ] = []
+        danmaku: list[dict[str, str | int]] = []
 
         # Bilibili 返回的弹幕时间仍然是
         # Part-local。
@@ -391,21 +388,13 @@ class BilibiliSource:
 
             for item in remote_danmaku:
                 danmaku.append(
-                    Danmaku(
-                        stream_id=(
-                            stream_id
-                        ),
-                        part_id=part_id,
-                        timestamp_ms=(
-                            item.timestamp_ms
-                        ),
-                        raw_text=(
-                            item.text
-                        ),
-                        text=(
-                            item.text
-                        ),
-                    )
+                    {
+                        "stream_id": stream_id,
+                        "part_id": part_id,
+                        "timestamp_ms": item.timestamp_ms,
+                        "raw_text": item.text,
+                        "text": item.text,
+                    }
                 )
 
             # 当前 Part 完成后，

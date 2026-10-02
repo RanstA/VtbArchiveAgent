@@ -8,9 +8,6 @@ from typing import (
 )
 
 from app.domain.source.vtuber import Vtuber
-from app.domain.danmaku import (
-    Danmaku,
-)
 from app.domain.source.stream import (
     Stream,
 )
@@ -24,14 +21,14 @@ from app.domain.source.stream_part import (
 class ArchiveBundle:
     """
     不同 Archive Source 的统一输出。
-    Stream / StreamPart / Danmaku。
+    Stream / StreamPart / 尚未持久化的弹幕字段。
     """
     source: str
     vtuber: Vtuber
     
     stream: Stream
     parts: list[StreamPart]
-    danmaku: list[Danmaku]
+    danmaku: list[dict[str, str | int]]
     
     source_metadata: dict[str, Any] = field(
         default_factory=dict
