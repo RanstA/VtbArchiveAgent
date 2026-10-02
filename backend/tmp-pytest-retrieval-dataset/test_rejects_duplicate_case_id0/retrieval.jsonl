@@ -1,2 +1,0 @@
-{"case_id": "same", "query": "query-1", "expected_event_ids": ["event-1"]}
-{"case_id": "same", "query": "query-2", "expected_event_ids": ["event-2"]}

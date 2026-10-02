@@ -1,2 +1,0 @@
-{"case_id": "cat", "query": "他以前聊过猫吗？", "expected_event_ids": ["event-cat"]}
-{"case_id": "game", "query": "哪次聊过游戏失败？", "expected_event_ids": ["event-game-1", "event-game-2"]}
