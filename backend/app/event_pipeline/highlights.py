@@ -3,9 +3,8 @@ import sqlite3
 from app.domain.evidence.danmaku import (
     Danmaku,
 )
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
-    make_highlight_id,
 )
 from app.event_pipeline.signals import (
     build_stream_signal_windows,
@@ -161,20 +160,6 @@ def generate_highlights_for_stream(
         )
 
         highlight = Highlight(
-            id=make_highlight_id(
-                stream_id=(
-                    peak.stream_id
-                ),
-                part_id=(
-                    peak.part_id
-                ),
-                start_ms=(
-                    peak.start_ms
-                ),
-                end_ms=(
-                    peak.end_ms
-                ),
-            ),
             stream_id=(
                 peak.stream_id
             ),

@@ -1,4 +1,4 @@
-from app.domain.highlight import Highlight, make_highlight_id
+from app.domain.signal.highlight import Highlight
 from app.event_pipeline.events import merge_highlights
 
 
@@ -12,12 +12,6 @@ def make_highlight(
     part_id: str = "part-1",
 ) -> Highlight:
     return Highlight(
-        id=make_highlight_id(
-            stream_id=stream_id,
-            part_id=part_id,
-            start_ms=start_ms,
-            end_ms=end_ms,
-        ),
         stream_id=stream_id,
         part_id=part_id,
         start_ms=start_ms,

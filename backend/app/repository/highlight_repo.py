@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
 )
 

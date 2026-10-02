@@ -2,7 +2,7 @@ import argparse
 import sqlite3
 from pathlib import Path
 
-from app.domain.highlight import Highlight
+from app.domain.signal.highlight import Highlight
 from app.event_pipeline.highlights import (
     DEFAULT_MIN_SCORE,
     generate_highlights_for_stream,

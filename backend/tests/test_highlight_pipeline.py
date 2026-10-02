@@ -1,9 +1,9 @@
 import sqlite3
 from datetime import datetime
+from uuid import UUID
 
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
-    make_highlight_id,
 )
 from app.domain.source.stream import (
     Stream,
@@ -263,17 +263,8 @@ def test_generate_highlights_for_stream():
             == 45_000
         )
 
-        assert (
-            top.id
-            == make_highlight_id(
-                stream_id=(
-                    bundle.stream.id
-                ),
-                part_id="p0",
-                start_ms=40_000,
-                end_ms=70_000,
-            )
-        )
+        assert isinstance(top, Highlight)
+        assert UUID(top.id).version == 4
 
         stored = (
             list_highlights_by_stream(
@@ -330,13 +321,7 @@ def test_regenerating_highlights_does_not_duplicate_rows():
             )
         )
 
-        assert [
-            item.id
-            for item in first
-        ] == [
-            item.id
-            for item in second
-        ]
+        assert len(first) == len(second) > 0
 
         stored = (
             list_highlights_by_stream(
@@ -349,8 +334,9 @@ def test_regenerating_highlights_does_not_duplicate_rows():
 
         assert (
             len(stored)
-            == len(first)
+            == len(second)
         )
+        assert stored == second
 
     finally:
         connection.close()
@@ -370,14 +356,6 @@ def test_generation_with_no_danmaku_clears_stale_highlights():
         )
 
         stale = Highlight(
-            id=make_highlight_id(
-                stream_id=(
-                    bundle.stream.id
-                ),
-                part_id="p0",
-                start_ms=0,
-                end_ms=30_000,
-            ),
             stream_id=(
                 bundle.stream.id
             ),

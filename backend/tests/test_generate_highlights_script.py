@@ -1,9 +1,8 @@
 import sqlite3
 from datetime import datetime
 
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
-    make_highlight_id,
 )
 from app.domain.source.stream import (
     Stream,
@@ -224,12 +223,6 @@ def test_generate_for_stream_reports_detector_result(
         connection.commit()
 
         expected = Highlight(
-            id=make_highlight_id(
-                stream_id=stream.id,
-                part_id="p0",
-                start_ms=10_000,
-                end_ms=40_000,
-            ),
             stream_id=stream.id,
             part_id="p0",
             start_ms=10_000,

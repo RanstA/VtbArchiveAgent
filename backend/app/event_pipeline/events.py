@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.domain.highlight import Highlight
+from app.domain.signal.highlight import Highlight
 
 
 DEFAULT_MERGE_GAP_MS = 20_000

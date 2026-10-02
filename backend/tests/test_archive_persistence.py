@@ -4,9 +4,8 @@ from datetime import datetime
 import pytest
 
 import app.ingestion.persist as persist_module
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
-    make_highlight_id,
 )
 from app.domain.source.stream import (
     Stream,
@@ -164,12 +163,6 @@ def make_highlight(
     stream_id: str,
 ) -> Highlight:
     return Highlight(
-        id=make_highlight_id(
-            stream_id=stream_id,
-            part_id="p0",
-            start_ms=1000,
-            end_ms=31_000,
-        ),
         stream_id=stream_id,
         part_id="p0",
         start_ms=1000,

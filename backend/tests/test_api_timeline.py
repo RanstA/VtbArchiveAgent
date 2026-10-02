@@ -19,9 +19,8 @@ from app.repository.event_repo import (
 from app.config.settings import (
     settings,
 )
-from app.domain.highlight import (
+from app.domain.signal.highlight import (
     Highlight,
-    make_highlight_id,
 )
 from app.domain.source.stream import (
     Stream,
@@ -64,12 +63,6 @@ def make_highlight(
     score: float,
 ) -> Highlight:
     return Highlight(
-        id=make_highlight_id(
-            stream_id=stream_id,
-            part_id=part_id,
-            start_ms=start_ms,
-            end_ms=end_ms,
-        ),
         stream_id=stream_id,
         part_id=part_id,
         start_ms=start_ms,
