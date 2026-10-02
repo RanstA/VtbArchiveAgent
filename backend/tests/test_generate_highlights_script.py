@@ -5,11 +5,11 @@ from app.domain.highlight import (
     Highlight,
     make_highlight_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.repository.database import (
@@ -59,16 +59,10 @@ def insert_test_stream(
         id=make_stream_id(
             vtuber_id=vtuber_id,
             live_time=live_time,
-            title=title,
         ),
         vtuber_id=vtuber_id,
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[],
         title=title,
-        video_url="",
-        status="local",
     )
 
     insert_stream(

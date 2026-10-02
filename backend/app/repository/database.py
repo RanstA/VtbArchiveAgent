@@ -52,6 +52,10 @@ def _assert_schema_compatible(
     避免产生语义错误的数据。
     """
 
+    if (_table_exists(connection, "vtuber_sources") or
+            _table_exists(connection, "stream_bv_ids")):
+        raise RuntimeError("Legacy Source tables detected; re-import into a new database")
+
     if not _table_exists(
         connection,
         "streams",
@@ -63,10 +67,11 @@ def _assert_schema_compatible(
         "streams",
     )
 
-    if "vtuber_id" not in stream_columns:
+    required = {"id", "vtuber_id", "live_time", "title", "status"}
+    if stream_columns != required:
         raise RuntimeError(
             "Legacy database schema detected: "
-            "streams.vtuber_id is missing. "
+            "streams must use Source V1 fields. "
             "Back up or remove the old development "
             "database and re-import the archive."
         )
@@ -85,6 +90,9 @@ def _assert_schema_compatible(
     required_part_columns = {
         "start_offset_ms",
         "duration_ms",
+        "bvid",
+        "cid",
+        "page",
     }
 
     missing_part_columns = required_part_columns - part_columns
@@ -113,45 +121,13 @@ def init_db(
         );
 
 
-        CREATE TABLE IF NOT EXISTS vtuber_sources (
-            vtuber_id TEXT NOT NULL,
-            source TEXT NOT NULL,
-            external_id TEXT,
-            display_name TEXT,
-
-            PRIMARY KEY (
-                vtuber_id,
-                source
-            ),
-
-            FOREIGN KEY (
-                vtuber_id
-            )
-                REFERENCES vtubers(id)
-                ON DELETE CASCADE
-        );
-
-
-        CREATE UNIQUE INDEX IF NOT EXISTS
-            idx_vtuber_sources_external_identity
-        ON vtuber_sources(
-            source,
-            external_id
-        )
-        WHERE external_id IS NOT NULL;
-
-
         CREATE TABLE IF NOT EXISTS streams (
             id TEXT PRIMARY KEY,
 
             vtuber_id TEXT NOT NULL,
 
-            month TEXT NOT NULL,
             live_time TEXT NOT NULL,
-            publish_times TEXT NOT NULL,
-
             title TEXT NOT NULL,
-            video_url TEXT NOT NULL,
             status TEXT NOT NULL,
 
             FOREIGN KEY (
@@ -162,23 +138,6 @@ def init_db(
         );
 
 
-        CREATE TABLE IF NOT EXISTS stream_bv_ids (
-            stream_id TEXT NOT NULL,
-            bv_id TEXT NOT NULL,
-
-            PRIMARY KEY (
-                stream_id,
-                bv_id
-            ),
-
-            FOREIGN KEY (
-                stream_id
-            )
-                REFERENCES streams(id)
-                ON DELETE CASCADE
-        );
-
-
         CREATE TABLE IF NOT EXISTS stream_parts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -186,6 +145,9 @@ def init_db(
             part_id TEXT NOT NULL,
 
             start_offset_ms INTEGER NOT NULL,
+            bvid TEXT,
+            cid TEXT,
+            page INTEGER,
             duration_ms INTEGER,
 
             video_path TEXT,
@@ -200,6 +162,8 @@ def init_db(
                 duration_ms IS NULL
                 OR duration_ms > 0
             ),
+
+            CHECK (page IS NULL OR page >= 1),
 
             FOREIGN KEY (
                 stream_id

@@ -5,17 +5,15 @@ from pathlib import Path
 
 from app.ingestion.media_probe import probe_duration_ms
 
-from app.domain.vtuber import (
-    Vtuber,
-    VtuberSource,
-)
+from app.domain.source.vtuber import Vtuber
 from app.domain.danmaku import (
     Danmaku,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
+    StreamStatus,
 )
-from app.domain.stream_part import (
+from app.domain.source.stream_part import (
     StreamPart,
 )
 from app.ingestion.ass_parser import (
@@ -412,18 +410,12 @@ class LocalSource:
                 )
             )
 
-        vtuber_source = VtuberSource(
-            vtuber_id=self.vtuber.id,
-            source="local",
-            external_id=None,
-            display_name=self.vtuber.display_name,
-        )
-
         return ArchiveBundle(
             source="local",
             vtuber=self.vtuber,
-            vtuber_sources=[vtuber_source],
-            stream=self.stream,
+            stream=self.stream.model_copy(
+                update={"status": StreamStatus.INGESTED}
+            ) if parts else self.stream,
             parts=parts,
             danmaku=danmaku,
             source_metadata={

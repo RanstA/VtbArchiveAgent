@@ -1,8 +1,7 @@
 import sqlite3
 
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
-    VtuberSource,
 )
 
 
@@ -25,37 +24,6 @@ def insert_vtuber(
         (
             vtuber.id,
             vtuber.display_name,
-        ),
-    )
-
-
-def insert_vtuber_source(
-    connection: sqlite3.Connection,
-    vtuber_source: VtuberSource,
-) -> None:
-    connection.execute(
-        """
-        INSERT INTO vtuber_sources (
-            vtuber_id,
-            source,
-            external_id,
-            display_name
-        )
-        VALUES (?, ?, ?, ?)
-
-        ON CONFLICT(
-            vtuber_id,
-            source
-        )
-        DO UPDATE SET
-            external_id = excluded.external_id,
-            display_name = excluded.display_name
-        """,
-        (
-            vtuber_source.vtuber_id,
-            vtuber_source.source,
-            vtuber_source.external_id,
-            vtuber_source.display_name,
         ),
     )
 
@@ -101,35 +69,6 @@ def list_vtubers(
         Vtuber(
             id=row[0],
             display_name=row[1],
-        )
-        for row in rows
-    ]
-
-
-def list_vtuber_sources(
-    connection: sqlite3.Connection,
-    vtuber_id: str,
-) -> list[VtuberSource]:
-    rows = connection.execute(
-        """
-        SELECT
-            vtuber_id,
-            source,
-            external_id,
-            display_name
-        FROM vtuber_sources
-        WHERE vtuber_id = ?
-        ORDER BY source ASC
-        """,
-        (vtuber_id,),
-    ).fetchall()
-
-    return [
-        VtuberSource(
-            vtuber_id=row[0],
-            source=row[1],
-            external_id=row[2],
-            display_name=row[3],
         )
         for row in rows
     ]

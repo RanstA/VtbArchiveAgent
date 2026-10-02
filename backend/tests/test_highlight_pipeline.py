@@ -8,16 +8,15 @@ from app.domain.highlight import (
     Highlight,
     make_highlight_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.stream_part import (
+from app.domain.source.stream_part import (
     StreamPart,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
-    VtuberSource,
 )
 from app.event_pipeline.highlights import (
     generate_highlights_for_stream,
@@ -68,16 +67,10 @@ def make_stream() -> Stream:
         id=make_stream_id(
             vtuber_id="vtuber-test",
             live_time=live_time,
-            title=title,
         ),
         vtuber_id="vtuber-test",
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[],
         title=title,
-        video_url="",
-        status="local",
     )
 
 
@@ -199,16 +192,6 @@ def make_bundle(
     return ArchiveBundle(
         source="local",
         vtuber=vtuber,
-        vtuber_sources=[
-            VtuberSource(
-                vtuber_id=vtuber.id,
-                source="local",
-                external_id=None,
-                display_name=(
-                    vtuber.display_name
-                ),
-            )
-        ],
         stream=stream,
         parts=[
             part

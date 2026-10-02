@@ -2,7 +2,7 @@ import argparse
 from collections import Counter
 from pathlib import Path
 
-from app.domain.vtuber import Vtuber
+from app.domain.source.vtuber import Vtuber
 from app.event_pipeline.highlights import (
     generate_highlights_for_stream,
 )

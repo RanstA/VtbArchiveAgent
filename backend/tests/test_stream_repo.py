@@ -3,20 +3,23 @@ from datetime import datetime
 
 import pytest
 
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.stream_part import StreamPart
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.repository.database import (
     init_db,
 )
 from app.repository.stream_repo import (
+    get_stream_by_id,
     insert_stream,
     list_streams,
 )
+from app.repository.stream_part_repo import insert_stream_part, list_stream_parts
 from app.repository.vtuber_repo import (
     insert_vtuber,
 )
@@ -57,21 +60,10 @@ def make_stream(
         id=make_stream_id(
             vtuber_id=vtuber_id,
             live_time=live_time,
-            title=title,
         ),
         vtuber_id=vtuber_id,
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[
-            "BV1TEST"
-        ],
         title=title,
-        video_url=(
-            "https://www.bilibili.com/"
-            "video/BV1TEST"
-        ),
-        status="online",
     )
 
 
@@ -96,6 +88,17 @@ def test_stream_round_trip_contains_vtuber_information():
         insert_stream(
             connection=connection,
             stream=stream,
+        )
+
+        insert_stream_part(
+            connection,
+            StreamPart(
+                stream_id=stream.id,
+                part_id="p0",
+                bvid="BV1TEST",
+                cid="1001",
+                page=1,
+            ),
         )
 
         rows = list_streams(
@@ -220,5 +223,40 @@ def test_stream_requires_existing_vtuber():
                 stream=stream,
             )
 
+    finally:
+        connection.close()
+
+
+def test_multiple_bvids_come_from_stream_parts_and_are_searchable():
+    connection = make_connection()
+    try:
+        insert_vtuber(connection, Vtuber(id="aza", display_name="Aza"))
+        stream = make_stream(vtuber_id="aza")
+        insert_stream(connection, stream)
+        for index, bvid in enumerate(("BV-ONE", "BV-TWO", "BV-TWO")):
+            insert_stream_part(
+                connection,
+                StreamPart(
+                    stream_id=stream.id,
+                    part_id=f"p{index}",
+                    start_offset_ms=index * 30_000,
+                    bvid=bvid,
+                    cid=str(100 + index),
+                    page=index + 1,
+                ),
+            )
+
+        assert get_stream_by_id(connection, stream.id)["bv_ids"] == [
+            "BV-ONE", "BV-TWO"
+        ]
+        assert [row["id"] for row in list_streams(connection, query="BV-TWO")] == [
+            stream.id
+        ]
+        assert [(part["bvid"], part["cid"], part["page"])
+                for part in list_stream_parts(connection, stream.id)] == [
+            ("BV-ONE", "100", 1),
+            ("BV-TWO", "101", 2),
+            ("BV-TWO", "102", 3),
+        ]
     finally:
         connection.close()

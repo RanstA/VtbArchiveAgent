@@ -11,9 +11,8 @@ from datetime import (
 from pathlib import Path
 from typing import Any
 
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
-    VtuberSource,
 )
 from app.ingestion.bilibili_client import (
     BilibiliClient,
@@ -276,8 +275,8 @@ def find_stream_id_by_bvid(
     row = connection.execute(
         """
         SELECT stream_id
-        FROM stream_bv_ids
-        WHERE bv_id = ?
+        FROM stream_parts
+        WHERE bvid = ?
         LIMIT 1
         """,
         (bvid,),
@@ -369,53 +368,6 @@ def build_bilibili_client(
         BilibiliClient(),
         False,
     )
-
-
-def enrich_bilibili_source_identity(
-    bundle,
-    *,
-    inventory: Inventory,
-) -> None:
-    """
-    Discovery 阶段已经拿到了稳定的 Bilibili MID。
-
-    当前 BilibiliSource 单 BVID ingestion
-    还不会自动把 owner.mid 放进 VtuberSource，
-    因此在批量导入边界补上它。
-
-    这样数据库最终保存的是：
-
-        vtuber_id = aza
-        source = bilibili
-        external_id = 480680646
-        display_name = 阿萨Aza
-    """
-
-    owner = str(
-        bundle.source_metadata.get(
-            "owner",
-            inventory.source_display_name,
-        )
-    ).strip()
-
-    if not owner:
-        owner = (
-            inventory.source_display_name
-        )
-
-    bundle.vtuber_sources = [
-        VtuberSource(
-            vtuber_id=(
-                inventory.vtuber_id
-            ),
-            source="bilibili",
-            external_id=(
-                inventory
-                .source_external_id
-            ),
-            display_name=owner,
-        )
-    ]
 
 
 def write_report(
@@ -781,18 +733,13 @@ def main() -> None:
                 if (
                     replay.bvid
                     not in
-                    bundle.stream.bv_ids
+                    [part.bvid for part in bundle.parts]
                 ):
                     raise RuntimeError(
                         "Loaded bundle does not "
                         "contain requested BVID: "
                         f"{replay.bvid}"
                     )
-
-                enrich_bilibili_source_identity(
-                    bundle,
-                    inventory=inventory,
-                )
 
                 print(
                     "Live time:",

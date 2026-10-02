@@ -19,16 +19,14 @@ def main() -> None:
     parser.add_argument("path", nargs="?", type=Path, default=DEFAULT_PATH)
     args = parser.parse_args()
 
-    streams = load_streams(args.path)
+    streams = load_streams(args.path, vtuber_id="mikoto")
 
     print("直播数量:", len(streams))
     for stream in streams[:3]:
         print()
         print("ID:", stream.id)
         print("直播时间:", stream.live_time)
-        print("发布时间:", stream.publish_times)
         print("标题:", stream.title)
-        print("BV:", stream.bv_id)
         print("状态:", stream.status)
 
 

@@ -45,8 +45,9 @@ print("\n=== BV 数量 ===")
 
 row = connection.execute(
     """
-    SELECT COUNT(*)
-    FROM stream_bv_ids
+    SELECT COUNT(DISTINCT bvid)
+    FROM stream_parts
+    WHERE bvid IS NOT NULL
     """
 ).fetchone()
 
@@ -58,11 +59,11 @@ rows = connection.execute(
     """
     SELECT
         streams.title,
-        stream_bv_ids.bv_id
+        stream_parts.bvid
     FROM streams
-    LEFT JOIN stream_bv_ids
-        ON stream_bv_ids.stream_id = streams.id
-    ORDER BY stream_bv_ids.bv_id
+    LEFT JOIN stream_parts
+        ON stream_parts.stream_id = streams.id
+    ORDER BY stream_parts.bvid
     """
 ).fetchall()
 

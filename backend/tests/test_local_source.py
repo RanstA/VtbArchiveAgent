@@ -2,10 +2,8 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
-from app.domain.stream import (
-    Stream,
-)
-from app.domain.vtuber import (
+from app.domain.source.stream import Stream, StreamStatus
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.ingestion.local_source import (
@@ -28,7 +26,6 @@ def make_stream(
     return Stream(
         id="stream-test",
         vtuber_id=(TEST_VTUBER.id),
-        month="2025-09",
         live_time=datetime(
             2025,
             9,
@@ -36,11 +33,7 @@ def make_stream(
             19,
             0,
         ),
-        publish_times=[],
-        bv_ids=[],
         title=title,
-        video_url="",
-        status="local",
     )
 
 
@@ -76,15 +69,7 @@ def test_local_source_loads_nested_layout(
 
     assert bundle.stream.vtuber_id == TEST_VTUBER.id
 
-    assert len(bundle.vtuber_sources) == 1
-
-    vtuber_source = bundle.vtuber_sources[0]
-
-    assert vtuber_source.vtuber_id == TEST_VTUBER.id
-
-    assert vtuber_source.source == "local"
-
-    assert vtuber_source.display_name == TEST_VTUBER.display_name
+    assert bundle.stream.status == StreamStatus.INGESTED
 
     assert bundle.source_metadata["layout"] == "nested"
 

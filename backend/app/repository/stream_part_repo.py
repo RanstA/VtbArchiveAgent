@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.domain.stream_part import StreamPart
+from app.domain.source.stream_part import StreamPart
 
 
 def insert_stream_part(
@@ -13,17 +13,23 @@ def insert_stream_part(
             stream_id,
             part_id,
             start_offset_ms,
+            bvid,
+            cid,
+            page,
             duration_ms,
             video_path,
             danmaku_path,
             xml_path
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             part.stream_id,
             part.part_id,
             part.start_offset_ms,
+            part.bvid,
+            part.cid,
+            part.page,
             part.duration_ms,
             part.video_path,
             part.danmaku_path,
@@ -66,6 +72,9 @@ def list_stream_parts(
             id,
             part_id,
             start_offset_ms,
+            bvid,
+            cid,
+            page,
             duration_ms,
             video_path,
             danmaku_path,
@@ -82,10 +91,13 @@ def list_stream_parts(
             "id": row[0],
             "part_id": row[1],
             "start_offset_ms": row[2],
-            "duration_ms": row[3],
-            "video_path": row[4],
-            "danmaku_path": row[5],
-            "xml_path": row[6],
+            "bvid": row[3],
+            "cid": row[4],
+            "page": row[5],
+            "duration_ms": row[6],
+            "video_path": row[7],
+            "danmaku_path": row[8],
+            "xml_path": row[9],
         }
         for row in rows
     ]

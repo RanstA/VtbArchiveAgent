@@ -10,11 +10,11 @@ from fastapi.testclient import (
 from app.config.settings import (
     settings,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.main import app
@@ -55,25 +55,10 @@ def make_stream(
                 vtuber_id
             ),
             live_time=live_time,
-            title=title,
         ),
         vtuber_id=vtuber_id,
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[
-            (
-                "BV-MIKOTO"
-                if (
-                    vtuber_id
-                    == "mikoto"
-                )
-                else "BV-AZA"
-            )
-        ],
         title=title,
-        video_url="",
-        status="online",
     )
 
 

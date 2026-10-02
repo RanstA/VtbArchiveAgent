@@ -7,7 +7,7 @@ from fastapi.testclient import (
 from app.config.settings import (
     settings,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.main import app

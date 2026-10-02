@@ -23,14 +23,14 @@ from app.domain.highlight import (
     Highlight,
     make_highlight_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.stream_part import (
+from app.domain.source.stream_part import (
     StreamPart,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.main import app
@@ -124,19 +124,13 @@ def prepare_database(
         stream_id = make_stream_id(
             vtuber_id="aza",
             live_time=live_time,
-            title="Timeline 测试直播",
         )
 
         stream = Stream(
             id=stream_id,
             vtuber_id="aza",
-            month="2026-09",
             live_time=live_time,
-            publish_times=[],
-            bv_ids=["BVTEST"],
             title="Timeline 测试直播",
-            video_url="",
-            status="online",
         )
 
         insert_stream(

@@ -1,7 +1,7 @@
-from app.domain.stream import (
+from app.domain.source.stream import (
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.ingestion.bilibili_client import (
@@ -142,36 +142,7 @@ def test_bilibili_source_maps_to_domain():
             live_time=(
                 bundle.stream.live_time
             ),
-            title=(
-                bundle.stream.title
-            ),
         )
-    )
-
-    assert (
-        len(
-            bundle.vtuber_sources
-        )
-        == 1
-    )
-
-    vtuber_source = (
-        bundle.vtuber_sources[0]
-    )
-
-    assert (
-        vtuber_source.vtuber_id
-        == TEST_VTUBER.id
-    )
-
-    assert (
-        vtuber_source.source
-        == "bilibili"
-    )
-
-    assert (
-        vtuber_source.display_name
-        == "TestVTuber"
     )
 
     assert (
@@ -214,6 +185,10 @@ def test_bilibili_source_maps_to_domain():
         "p0",
         "p1",
     ]
+
+    assert [part.bvid for part in bundle.parts] == ["BV1TEST", "BV1TEST"]
+    assert [part.page for part in bundle.parts] == [1, 2]
+    assert [part.cid for part in bundle.parts] == ["1001", "1002"]
 
     assert len(
         bundle.danmaku

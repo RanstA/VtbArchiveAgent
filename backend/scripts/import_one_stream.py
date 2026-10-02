@@ -7,6 +7,8 @@ from app.repository.database import connect_db, init_db
 from app.repository.stream_repo import insert_stream
 from app.repository.stream_part_repo import insert_stream_part
 from app.repository.danmaku_repo import insert_danmaku_batch
+from app.repository.vtuber_repo import insert_vtuber
+from app.domain.source.vtuber import Vtuber
 
 
 CSV_PATH = Path(
@@ -18,7 +20,7 @@ STREAM_DIR = Path(
 
 DB_PATH = Path("vtuber_archive.db")
 
-streams = load_streams(CSV_PATH)
+streams = load_streams(CSV_PATH, vtuber_id="mikoto")
 
 stream = next(
     s for s in streams
@@ -28,12 +30,12 @@ stream = next(
 print("准备导入:")
 print(stream.title)
 print("stream_id:", stream.id)
-print("BV:", stream.bv_ids)
 
 connection = connect_db(DB_PATH)
 init_db(connection)
 
 try:
+    insert_vtuber(connection, Vtuber(id="mikoto", display_name="蜜言Mikoto"))
     insert_stream(connection, stream)
     parts = scan_stream_directory(
         directory=STREAM_DIR,

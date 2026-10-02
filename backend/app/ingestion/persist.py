@@ -1,5 +1,6 @@
 import sqlite3
 
+from app.domain.source.stream import StreamStatus
 from app.domain.danmaku import (
     Danmaku,
 )
@@ -18,7 +19,6 @@ from app.repository.stream_repo import (
 )
 from app.repository.vtuber_repo import (
     insert_vtuber,
-    insert_vtuber_source,
 )
 
 
@@ -40,38 +40,6 @@ def _validate_archive_bundle(
         raise ValueError(
             "bundle.stream.vtuber_id "
             "must match bundle.vtuber.id"
-        )
-
-    if not bundle.vtuber_sources:
-        raise ValueError(
-            "bundle must contain at least "
-            "one vtuber source"
-        )
-
-    source_found = False
-
-    for vtuber_source in (
-        bundle.vtuber_sources
-    ):
-        if (
-            vtuber_source.vtuber_id
-            != bundle.vtuber.id
-        ):
-            raise ValueError(
-                "all vtuber sources must "
-                "belong to bundle.vtuber"
-            )
-
-        if (
-            vtuber_source.source
-            == bundle.source
-        ):
-            source_found = True
-
-    if not source_found:
-        raise ValueError(
-            "bundle.source must be represented "
-            "in bundle.vtuber_sources"
         )
 
     part_ids: set[str] = set()
@@ -155,7 +123,6 @@ def persist_archive_bundle(
     事务边界：
 
         Vtuber
-        + VtuberSource
         + Stream
         + StreamPart
         + Danmaku
@@ -167,7 +134,7 @@ def persist_archive_bundle(
         替换当前 Stream 的 Part / Danmaku。
 
     metadata-only Bundle（parts 为空）：
-        仅更新 Vtuber / Source / Stream 元数据，
+        仅更新 Vtuber / Stream 元数据，
         不删除已有 Part / Danmaku。
 
     注意：
@@ -205,19 +172,20 @@ def persist_archive_bundle(
             vtuber=bundle.vtuber,
         )
 
-        for vtuber_source in (
-            bundle.vtuber_sources
-        ):
-            insert_vtuber_source(
-                connection=connection,
-                vtuber_source=(
-                    vtuber_source
-                ),
-            )
+        stream = bundle.stream
+        if not bundle.parts:
+            existing = connection.execute(
+                "SELECT status FROM streams WHERE id = ?",
+                (stream.id,),
+            ).fetchone()
+            if existing is not None:
+                stream = stream.model_copy(
+                    update={"status": StreamStatus(existing[0])}
+                )
 
         insert_stream(
             connection=connection,
-            stream=bundle.stream,
+            stream=stream,
         )
 
         # metadata-only Bundle：

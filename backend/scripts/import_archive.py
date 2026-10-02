@@ -4,8 +4,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from app.domain.stream import Stream
-from app.domain.vtuber import Vtuber
+from app.domain.source.stream import Stream
+from app.domain.source.vtuber import Vtuber
 from app.ingestion.csv_loader import load_streams
 from app.ingestion.local_source import LocalSource
 from app.ingestion.persist import (

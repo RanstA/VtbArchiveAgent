@@ -1,7 +1,6 @@
-import json
 import sqlite3
 
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
 )
 
@@ -15,68 +14,26 @@ def insert_stream(
         INSERT INTO streams (
             id,
             vtuber_id,
-            month,
             live_time,
-            publish_times,
             title,
-            video_url,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
 
         ON CONFLICT(id)
         DO UPDATE SET
             vtuber_id = excluded.vtuber_id,
-            month = excluded.month,
             live_time = excluded.live_time,
-            publish_times = excluded.publish_times,
             title = excluded.title,
-            video_url = excluded.video_url,
             status = excluded.status
         """,
         (
             stream.id,
             stream.vtuber_id,
-            stream.month,
             stream.live_time.isoformat(),
-            json.dumps(
-                [
-                    time.isoformat()
-                    for time
-                    in stream.publish_times
-                ],
-                ensure_ascii=False,
-            ),
             stream.title,
-            stream.video_url,
-            stream.status,
+            stream.status.value,
         ),
-    )
-
-    connection.execute(
-        """
-        DELETE FROM stream_bv_ids
-        WHERE stream_id = ?
-        """,
-        (stream.id,),
-    )
-
-    connection.executemany(
-        """
-        INSERT INTO stream_bv_ids (
-            stream_id,
-            bv_id
-        )
-        VALUES (?, ?)
-        """,
-        [
-            (
-                stream.id,
-                bv_id,
-            )
-            for bv_id
-            in stream.bv_ids
-        ],
     )
 
 
@@ -134,12 +91,13 @@ def list_streams(
             s.status,
 
             (
-                SELECT GROUP_CONCAT(
-                    b.bv_id
+                SELECT GROUP_CONCAT(bvid)
+                FROM (
+                    SELECT DISTINCT bvid
+                    FROM stream_parts
+                    WHERE stream_id = s.id AND bvid IS NOT NULL
+                    ORDER BY start_offset_ms, id
                 )
-                FROM stream_bv_ids AS b
-                WHERE
-                    b.stream_id = s.id
             ) AS bv_ids,
 
             EXISTS (
@@ -180,10 +138,10 @@ def list_streams(
 
             OR EXISTS (
                 SELECT 1
-                FROM stream_bv_ids AS b
+                FROM stream_parts AS b
                 WHERE
                     b.stream_id = s.id
-                    AND b.bv_id LIKE ?
+                    AND b.bvid LIKE ?
             )
         )
 
@@ -229,12 +187,13 @@ def get_stream_by_id(
             s.status,
 
             (
-                SELECT GROUP_CONCAT(
-                    b.bv_id
+                SELECT GROUP_CONCAT(bvid)
+                FROM (
+                    SELECT DISTINCT bvid
+                    FROM stream_parts
+                    WHERE stream_id = s.id AND bvid IS NOT NULL
+                    ORDER BY start_offset_ms, id
                 )
-                FROM stream_bv_ids AS b
-                WHERE
-                    b.stream_id = s.id
             ) AS bv_ids,
 
             EXISTS (

@@ -11,16 +11,16 @@ from app.domain.highlight import (
     Highlight,
     make_highlight_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
+    StreamStatus,
     make_stream_id,
 )
-from app.domain.stream_part import (
+from app.domain.source.stream_part import (
     StreamPart,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
-    VtuberSource,
 )
 from app.ingestion.persist import (
     persist_archive_bundle,
@@ -46,7 +46,6 @@ from app.repository.stream_repo import (
 )
 from app.repository.vtuber_repo import (
     get_vtuber,
-    list_vtuber_sources,
 )
 
 
@@ -69,7 +68,7 @@ def make_connection() -> sqlite3.Connection:
 def make_bundle(
     *,
     vtuber_name: str = "测试主播",
-    status: str = "local",
+    status: StreamStatus = StreamStatus.INGESTED,
     danmaku_path: str = "archive.ass",
     danmaku_texts: tuple[
         str,
@@ -99,38 +98,17 @@ def make_bundle(
         id=make_stream_id(
             vtuber_id=vtuber.id,
             live_time=live_time,
-            title=title,
         ),
         vtuber_id=vtuber.id,
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[
-            "BV1TEST"
-        ],
         title=title,
-        video_url="",
         status=status,
-    )
-
-    vtuber_source = (
-        VtuberSource(
-            vtuber_id=vtuber.id,
-            source="local",
-            external_id=None,
-            display_name=(
-                vtuber_name
-            ),
-        )
     )
 
     if not include_parts:
         return ArchiveBundle(
             source="local",
             vtuber=vtuber,
-            vtuber_sources=[
-                vtuber_source
-            ],
             stream=stream,
             parts=[],
             danmaku=[],
@@ -144,6 +122,9 @@ def make_bundle(
     part = StreamPart(
         stream_id=stream.id,
         part_id="p0",
+        bvid="BV1TEST",
+        cid="12345",
+        page=1,
         video_path=None,
         danmaku_path=(
             danmaku_path
@@ -171,9 +152,6 @@ def make_bundle(
     return ArchiveBundle(
         source="local",
         vtuber=vtuber,
-        vtuber_sources=[
-            vtuber_source
-        ],
         stream=stream,
         parts=[
             part
@@ -258,20 +236,6 @@ def test_persist_archive_bundle_writes_complete_graph():
             == bundle.vtuber
         )
 
-        sources = (
-            list_vtuber_sources(
-                connection=connection,
-                vtuber_id=(
-                    bundle.vtuber.id
-                ),
-            )
-        )
-
-        assert (
-            sources
-            == bundle.vtuber_sources
-        )
-
         streams = list_streams(
             connection=connection,
         )
@@ -301,6 +265,10 @@ def test_persist_archive_bundle_writes_complete_graph():
         assert (
             parts[0]["part_id"]
             == "p0"
+        )
+
+        assert (parts[0]["bvid"], parts[0]["cid"], parts[0]["page"]) == (
+            "BV1TEST", "12345", 1
         )
 
         danmaku = (
@@ -356,23 +324,7 @@ def test_persist_same_bundle_is_idempotent():
         assert (
             count_rows(
                 connection,
-                "vtuber_sources",
-            )
-            == 1
-        )
-
-        assert (
-            count_rows(
-                connection,
                 "streams",
-            )
-            == 1
-        )
-
-        assert (
-            count_rows(
-                connection,
-                "stream_bv_ids",
             )
             == 1
         )
@@ -409,7 +361,7 @@ def test_metadata_only_bundle_keeps_existing_payload():
         )
 
         metadata_only = make_bundle(
-            status="metadata_only",
+            status=StreamStatus.PENDING,
             include_parts=False,
         )
 
@@ -452,7 +404,7 @@ def test_metadata_only_bundle_keeps_existing_payload():
 
         assert (
             streams[0]["status"]
-            == "metadata_only"
+            == StreamStatus.INGESTED
         )
 
     finally:
@@ -491,7 +443,7 @@ def test_successful_reimport_replaces_payload_and_invalidates_highlights():
         )
 
         replacement = make_bundle(
-            status="updated",
+            status=StreamStatus.INGESTED,
             danmaku_path="new.ass",
             danmaku_texts=(
                 "新弹幕",
@@ -568,7 +520,7 @@ def test_failed_reimport_rolls_back_entire_bundle(
     try:
         original = make_bundle(
             vtuber_name="旧名字",
-            status="old",
+            status=StreamStatus.PROCESSED,
             danmaku_path="old.ass",
             danmaku_texts=(
                 "旧弹幕一",
@@ -597,7 +549,7 @@ def test_failed_reimport_rolls_back_entire_bundle(
 
         replacement = make_bundle(
             vtuber_name="新名字",
-            status="new",
+            status=StreamStatus.INGESTED,
             danmaku_path="new.ass",
             danmaku_texts=(
                 "新弹幕",
@@ -648,26 +600,13 @@ def test_failed_reimport_rolls_back_entire_bundle(
             == "旧名字"
         )
 
-        sources = (
-            list_vtuber_sources(
-                connection=connection,
-                vtuber_id="vtuber-test",
-            )
-        )
-
-        assert (
-            sources[0]
-            .display_name
-            == "旧名字"
-        )
-
         streams = list_streams(
             connection=connection,
         )
 
         assert (
             streams[0]["status"]
-            == "old"
+            == StreamStatus.PROCESSED
         )
 
         parts = list_stream_parts(

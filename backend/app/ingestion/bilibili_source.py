@@ -7,16 +7,16 @@ from datetime import (
 from typing import Literal
 
 from app.domain.danmaku import Danmaku
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
+    StreamStatus,
     make_stream_id,
 )
-from app.domain.stream_part import (
+from app.domain.source.stream_part import (
     StreamPart,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
-    VtuberSource,
 )
 from app.ingestion.bilibili_client import (
     BilibiliClient,
@@ -277,19 +277,12 @@ class BilibiliSource:
             )
         )
 
-        publish_time = (
-            _timestamp_to_china_datetime(
-                video.pubdate
-            )
-        )
-
         stream_id = (
             make_stream_id(
                 vtuber_id=(
                     self.vtuber.id
                 ),
                 live_time=live_time,
-                title=video.title,
             )
         )
 
@@ -298,23 +291,9 @@ class BilibiliSource:
             vtuber_id=(
                 self.vtuber.id
             ),
-            month=(
-                live_time.strftime(
-                    "%Y-%m"
-                )
-            ),
             live_time=live_time,
-            publish_times=[
-                publish_time
-            ],
-            bv_ids=[
-                video.bvid
-            ],
             title=video.title,
-            video_url=(
-                video.video_url
-            ),
-            status="online",
+            status=StreamStatus.INGESTED if video.parts else StreamStatus.PENDING,
         )
 
         parts: list[
@@ -384,6 +363,9 @@ class BilibiliSource:
                 start_offset_ms=(
                     start_offset_ms
                 ),
+                bvid=video.bvid,
+                cid=str(remote_part.cid),
+                page=remote_part.page_index + 1,
                 duration_ms=(
                     duration_ms
                 ),
@@ -434,25 +416,9 @@ class BilibiliSource:
                     duration_ms
                 )
 
-        vtuber_source = (
-            VtuberSource(
-                vtuber_id=(
-                    self.vtuber.id
-                ),
-                source="bilibili",
-                external_id=None,
-                display_name=(
-                    video.owner
-                ),
-            )
-        )
-
         return ArchiveBundle(
             source="bilibili",
             vtuber=self.vtuber,
-            vtuber_sources=[
-                vtuber_source
-            ],
             stream=stream,
             parts=parts,
             danmaku=danmaku,

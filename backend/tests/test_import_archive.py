@@ -3,11 +3,11 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.repository.database import (
@@ -72,16 +72,10 @@ def make_stream(
         id=make_stream_id(
             vtuber_id=vtuber_id,
             live_time=live_time,
-            title=title,
         ),
         vtuber_id=vtuber_id,
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=[],
         title=title,
-        video_url="",
-        status="local",
     )
 
 

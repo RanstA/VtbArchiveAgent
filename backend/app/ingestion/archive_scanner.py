@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from app.domain.stream_part import StreamPart
+from app.domain.source.stream_part import StreamPart
 
 
 PART_ID_PATTERN = re.compile(r"(\d+)$")

@@ -55,26 +55,20 @@ def insert_test_stream(
         INSERT INTO streams (
             id,
             vtuber_id,
-            month,
             live_time,
-            publish_times,
             title,
-            video_url,
             status
         )
         VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?
         )
         """,
         (
             stream_id,
             "vtuber-test",
-            "2023-09",
             "2023-09-08T18:00:00+08:00",
-            "[]",
             "测试直播",
-            "",
-            "ok",
+            "已导入",
         ),
     )
 

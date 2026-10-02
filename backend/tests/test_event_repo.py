@@ -8,11 +8,11 @@ from app.domain.event import (
     Event,
     make_event_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.repository.database import (
@@ -67,19 +67,13 @@ def prepare_database(
     stream_id = make_stream_id(
         vtuber_id="aza",
         live_time=live_time,
-        title="Event 测试直播",
     )
 
     stream = Stream(
         id=stream_id,
         vtuber_id="aza",
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=["BVTEST"],
         title="Event 测试直播",
-        video_url="",
-        status="online",
     )
 
     insert_stream(
@@ -324,11 +318,11 @@ from app.domain.event import (
     Event,
     make_event_id,
 )
-from app.domain.stream import (
+from app.domain.source.stream import (
     Stream,
     make_stream_id,
 )
-from app.domain.vtuber import (
+from app.domain.source.vtuber import (
     Vtuber,
 )
 from app.repository.database import (
@@ -378,19 +372,13 @@ def prepare_database(
     stream_id = make_stream_id(
         vtuber_id="aza",
         live_time=live_time,
-        title="Event 测试直播",
     )
 
     stream = Stream(
         id=stream_id,
         vtuber_id="aza",
-        month="2026-09",
         live_time=live_time,
-        publish_times=[],
-        bv_ids=["BVTEST"],
         title="Event 测试直播",
-        video_url="",
-        status="online",
     )
 
     insert_stream(
