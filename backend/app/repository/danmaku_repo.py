@@ -138,3 +138,57 @@ def list_danmaku_window(
         params.append(limit)
 
     rows = connection.execute(sql, params).fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "timestamp_ms": row[1],
+            "raw_text": row[2],
+            "text": row[3],
+        }
+        for row in rows
+    ]
+
+
+def get_danmaku_by_ids(
+    connection: sqlite3.Connection,
+    *,
+    danmaku_ids: list[int],
+) -> list[Danmaku]:
+    if not danmaku_ids:
+        return []
+
+    placeholders = ",".join("?" for _ in danmaku_ids)
+
+    rows = connection.execute(
+        f"""
+        SELECT
+            d.id,
+            sp.stream_id,
+            sp.part_id,
+            d.timestamp_ms,
+            d.raw_text,
+            d.text
+        FROM danmaku AS d
+
+        JOIN stream_parts AS sp
+            ON sp.id = d.stream_part_id
+
+        WHERE d.id IN ({placeholders})
+        """,
+        danmaku_ids,
+    ).fetchall()
+
+    by_id = {
+        int(row[0]): Danmaku(
+            id=int(row[0]),
+            stream_id=row[1],
+            part_id=row[2],
+            timestamp_ms=row[3],
+            raw_text=row[4],
+            text=row[5],
+        )
+        for row in rows
+    }
+
+    return [by_id[danmaku_id] for danmaku_id in danmaku_ids if danmaku_id in by_id]

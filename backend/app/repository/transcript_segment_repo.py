@@ -2,7 +2,6 @@ import sqlite3
 
 from app.domain.evidence.transcript_segment import TranscriptSegment
 
-
 _INSERT_SQL = """
     INSERT INTO transcript_segments (
         id,
@@ -119,3 +118,51 @@ def list_transcript_segments_window(
         (stream_id, part_id, start_ms, end_ms),
     ).fetchall()
     return [_row_to_segment(row) for row in rows]
+
+
+def get_transcript_segments_by_ids(
+    connection: sqlite3.Connection,
+    *,
+    transcript_segment_ids: list[str],
+) -> list[TranscriptSegment]:
+    if not transcript_segment_ids:
+        return []
+
+    placeholders = ",".join("?" for _ in transcript_segment_ids)
+
+    rows = connection.execute(
+        f"""
+        SELECT
+            id,
+            stream_id,
+            part_id,
+            start_ms,
+            end_ms,
+            raw_text,
+            text,
+            source
+        FROM transcript_segments
+        WHERE id IN ({placeholders})
+        """,
+        transcript_segment_ids,
+    ).fetchall()
+
+    by_id = {
+        row[0]: TranscriptSegment(
+            id=row[0],
+            stream_id=row[1],
+            part_id=row[2],
+            start_ms=row[3],
+            end_ms=row[4],
+            raw_text=row[5],
+            text=row[6],
+            source=row[7],
+        )
+        for row in rows
+    }
+
+    return [
+        by_id[transcript_id]
+        for transcript_id in transcript_segment_ids
+        if transcript_id in by_id
+    ]
