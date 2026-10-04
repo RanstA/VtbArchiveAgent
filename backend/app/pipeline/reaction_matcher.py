@@ -1,6 +1,4 @@
 import sqlite3
-import re
-from dataclasses import dataclass
 from app.domain.signal.highlight import Highlight
 from app.domain.pipeline.reaction_match import ReactionMatch
 from app.repository.danmaku_repo import list_danmaku_window
@@ -146,24 +144,6 @@ def _build_one_reaction_match(
         matcher_version=MATCHER_VERSION,
     )
 
-
-def build_reaction_matches(
-    connection: sqlite3.Connection, *, stream_id: str
-) -> list[ReactionMatch]:
-    highlights = list_highlights_by_stream(
-        connection,
-        stream_id,
-    )
-    matches: list[ReactionMatch] = []
-    for highlight in highlights:
-        match = _build_one_reaction_match(connection, highlight=highlight)
-        if match is None:
-            continue
-        matches.append(match)
-    replace_reaction_matches_for_stream(
-        connection, stream_id=stream_id, reaction_matches=matches
-    )
-    return matches
 
 
 def build_reaction_matches(
