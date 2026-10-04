@@ -14,8 +14,7 @@ def insert_danmaku_batch(
         return
 
     if any(
-        not isinstance(item["timestamp_ms"], int)
-        or item["timestamp_ms"] < 0
+        not isinstance(item["timestamp_ms"], int) or item["timestamp_ms"] < 0
         for item in danmaku
     ):
         raise ValueError("timestamp_ms must be a non-negative integer")
@@ -89,7 +88,7 @@ def list_danmaku_window(
     part_id: str,
     start_ms: int,
     end_ms: int,
-    limit: int = 120,
+    limit: int | None = 120,
 ) -> list[dict]:
     """
     查询某个 Stream Part 的局部弹幕窗口。
@@ -101,22 +100,15 @@ def list_danmaku_window(
     """
 
     if start_ms < 0:
-        raise ValueError(
-            "start_ms must be >= 0"
-        )
+        raise ValueError("start_ms must be >= 0")
 
     if end_ms <= start_ms:
-        raise ValueError(
-            "end_ms must be greater than start_ms"
-        )
+        raise ValueError("end_ms must be greater than start_ms")
 
-    if limit < 1:
-        raise ValueError(
-            "limit must be >= 1"
-        )
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be >= 1")
 
-    rows = connection.execute(
-        """
+    sql = """
         SELECT
             d.id,
             d.timestamp_ms,
@@ -137,28 +129,12 @@ def list_danmaku_window(
         ORDER BY
             d.timestamp_ms ASC,
             d.id ASC
+        """
 
-        LIMIT ?
-        """,
-        (
-            stream_id,
-            part_id,
-            start_ms,
-            end_ms,
-            limit,
-        ),
-    ).fetchall()
+    params = [stream_id, part_id, start_ms, end_ms]
 
-    return [
-        {
-            "id": int(
-                row[0]
-            ),
-            "timestamp_ms": int(
-                row[1]
-            ),
-            "raw_text": row[2],
-            "text": row[3],
-        }
-        for row in rows
-    ]
+    if limit is not None:
+        sql += "\nLIMIT ?"
+        params.append(limit)
+
+    rows = connection.execute(sql, params).fetchall()
