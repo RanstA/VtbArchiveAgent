@@ -10,8 +10,16 @@ from app.pipeline.topic_analyzer import (
 from app.pipeline.topic_candidate import (
     build_topic_candidates,
 )
+from app.pipeline.topic_segment_builder import (
+    build_topic_segments,
+)
 from app.repository.database import (
     connect_db,
+    init_db,
+)
+from app.repository.topic_segment_repo import (
+    list_topic_segments_by_stream,
+    replace_topic_segments_for_stream,
 )
 
 DB_PATH = Path("aza_demo_v1.db")
@@ -45,6 +53,7 @@ def main() -> None:
     )
 
     connection = connect_db(DB_PATH)
+    init_db(connection)
 
     try:
         candidates = build_topic_candidates(
@@ -70,6 +79,115 @@ def main() -> None:
             connection,
             candidate=candidate,
         )
+        segments = build_topic_segments(
+            connection,
+            candidate=candidate,
+            analysis=result,
+        )
+
+        replace_topic_segments_for_stream(
+            connection,
+            stream_id=STREAM_ID,
+            topic_segments=segments,
+        )
+
+        persisted_segments = list_topic_segments_by_stream(
+            connection,
+            stream_id=STREAM_ID,
+        )
+
+        assert len(persisted_segments) == len(segments)
+
+        assert [segment.model_dump() for segment in persisted_segments] == [
+            segment.model_dump() for segment in segments
+        ]
+
+        print()
+        print("=== PERSISTENCE CHECK ===")
+        print(
+            "built:",
+            len(segments),
+        )
+        print(
+            "persisted:",
+            len(persisted_segments),
+        )
+        print(
+            "round trip: OK",
+        )
+
+        print()
+
+        for index, segment in enumerate(
+            persisted_segments,
+            start=1,
+        ):
+            print(
+                f"{index}. "
+                f"{segment.start_ms} -> "
+                f"{segment.end_ms} | "
+                f"{segment.title}"
+            )
+
+        segments = build_topic_segments(
+            connection,
+            candidate=candidate,
+            analysis=result,
+        )
+
+        print()
+        print("=== TOPIC SEGMENTS ===")
+        print()
+
+        for index, segment in enumerate(
+            segments,
+            start=1,
+        ):
+            print(f"=== SEGMENT #{index} ===")
+
+            print(
+                "id:",
+                segment.id,
+            )
+
+            print(
+                "parts:",
+                segment.source_part_ids,
+            )
+
+            print(
+                "reaction matches:",
+                segment.reaction_match_ids,
+            )
+
+            print(
+                "range:",
+                segment.start_ms,
+                "->",
+                segment.end_ms,
+            )
+
+            print(
+                "salience:",
+                segment.salience_score,
+            )
+
+            print(
+                "confidence:",
+                segment.confidence,
+            )
+
+            print(
+                "title:",
+                segment.title,
+            )
+
+            print(
+                "transcripts:",
+                len(segment.transcript_segment_ids),
+            )
+
+            print()
 
         for index, topic in enumerate(
             result.topics,

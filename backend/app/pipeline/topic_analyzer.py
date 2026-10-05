@@ -10,6 +10,8 @@ from app.investigation.model_client import (
 from app.pipeline.topic_analysis import (
     TopicAnalysisResult,
     validate_topic_analysis,
+    validate_topic_analysis_evidence,
+    normalize_topic_analysis_evidence
 )
 from app.pipeline.topic_candidate import (
     TopicCandidate,
@@ -81,6 +83,16 @@ class TopicAnalyzer:
         validate_topic_analysis(
             candidate,
             result,
+        )
+        
+        normalize_topic_analysis_evidence(
+            result
+        )
+        
+        
+        validate_topic_analysis_evidence(
+            connection,
+            result=result,
         )
 
         return result

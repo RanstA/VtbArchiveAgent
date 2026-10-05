@@ -1,3 +1,6 @@
+import sqlite3
+
+from app.repository.reaction_match_repo import get_reaction_match_by_id
 from pydantic import BaseModel, Field
 from app.pipeline.topic_candidate import TopicCandidate
 
@@ -6,13 +9,12 @@ class AnalyzedTopic(BaseModel):
     reaction_match_ids: list[str] = Field(
         min_length=1, description=("属于当前话题的连续 ReactionMatch ID 列表")
     )
-    
-    
+
     transcript_segment_ids: list[str] = Field(
         min_length=1,
         description="直接支撑当前话题语义的 TranscriptSegment ID 列表",
     )
-    
+
     title: str = Field(
         min_length=1,
         description="话题的简短标题",
@@ -74,4 +76,61 @@ def validate_topic_analysis(
             "topic analysis must preserve "
             "candidate reaction match order "
             "and contiguous topic boundaries"
+        )
+
+
+def validate_topic_analysis_evidence(
+    connection: sqlite3.Connection,
+    *,
+    result: TopicAnalysisResult,
+) -> None:
+    for topic in result.topics:
+        allowed_transcript_ids: set[str] = set()
+
+        for reaction_match_id in topic.reaction_match_ids:
+            reaction_match = get_reaction_match_by_id(
+                connection,
+                reaction_match_id,
+            )
+
+            if reaction_match is None:
+                raise ValueError(
+                    "reaction match does not exist: "
+                    f"{reaction_match_id}"
+                )
+
+            allowed_transcript_ids.update(
+                reaction_match.transcript_segment_ids
+            )
+
+        actual_ids = topic.transcript_segment_ids
+
+        if len(actual_ids) != len(set(actual_ids)):
+            raise ValueError(
+                "topic analysis contains duplicate "
+                "transcript_segment_ids"
+            )
+
+        unexpected_ids = (
+            set(actual_ids)
+            - allowed_transcript_ids
+        )
+
+        if unexpected_ids:
+            raise ValueError(
+                "topic analysis contains transcript "
+                "segments outside its reaction matches: "
+                f"{sorted(unexpected_ids)}"
+            )
+            
+            
+            
+def normalize_topic_analysis_evidence(
+    result: TopicAnalysisResult,
+) -> None:
+    for topic in result.topics:
+        topic.transcript_segment_ids = list(
+            dict.fromkeys(
+                topic.transcript_segment_ids
+            )
         )

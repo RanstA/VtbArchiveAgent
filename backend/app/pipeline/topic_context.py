@@ -34,13 +34,22 @@ def _format_reaction_context(
     lines.append("[TRANSCRIPT]")
 
     for item in context.transcripts:
+        overlaps_highlight = (
+            item.end_ms > context.highlight_start_ms
+            and item.start_ms < context.highlight_end_ms
+        )
+
+        label = (
+            "HIGHLIGHT"
+            if overlaps_highlight
+            else "CONTEXT"
+        )
+
         lines.append(
+            f"[{label}] "
             f"{item.id} | "
-            f"{item.start_ms}"
-            f"-"
-            f"{item.end_ms}"
-            f" | "
-            f"{item.text}"
+            f"{item.start_ms}-{item.end_ms}"
+            f" | {item.text}"
         )
 
     lines.append("")
