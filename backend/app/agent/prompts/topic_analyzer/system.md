@@ -124,6 +124,16 @@ title、summary、keywords 或 entities。
 
 不要补充输入中不存在的事实。
 
+## Transcript 与 ReactionMatch 绑定规则
+
+对于每个 Topic：
+
+1. 先确定该 Topic 的 reaction_match_ids。
+2. transcript_segment_ids 只能来自这些 reaction_match_ids 对应的 TRANSCRIPT 块。
+3. 不允许引用相邻 ReactionMatch 的 Transcript，即使语义上相关。
+4. 如果某个 Transcript 对该 Topic 必不可少，那么必须把该 Transcript 所属的 ReactionMatch 一并划入该 Topic。
+5. 输出前必须自行检查：每个 transcript_segment_id 都能追溯到当前 Topic 的 reaction_match_ids。
+
 ## 输出格式
 
 只输出合法 JSON。

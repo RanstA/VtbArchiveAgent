@@ -59,6 +59,14 @@ export interface DetectedHighlight {
   detectorVersion: string
 }
 
+export type TopicType =
+  | 'talk'
+  | 'interaction'
+  | 'singing'
+  | 'gameplay'
+  | 'reaction'
+  | 'announcement'
+
 export interface TimelineItem {
   id: string
 
@@ -72,6 +80,7 @@ export interface TimelineItem {
   localAnchorMs: number
 
   salienceScore: number
+  topicType: TopicType | null
 
   /** Null title identifies a Highlight fallback, without semantic claims. */
   title: string | null

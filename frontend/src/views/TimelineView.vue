@@ -19,6 +19,7 @@ import type {
   StreamDetail,
   StreamTimeline,
   TimelineItem,
+  TopicType,
 } from '@/types'
 
 import {
@@ -29,6 +30,14 @@ import {
 
 const IMPORTANT_THRESHOLD = 0.95
 const REPLAY_LEAD_MS = 20_000
+const TOPIC_TYPE_LABELS: Record<TopicType, string> = {
+  talk: '杂谈',
+  interaction: '互动',
+  singing: '演唱',
+  gameplay: '游戏',
+  reaction: 'Reaction',
+  announcement: '公告',
+}
 
 
 const route =
@@ -160,6 +169,14 @@ function isImportant(
 function isSemantic(item: TimelineItem): boolean {
   // Also tolerate responses from older archives that omit semantic fields.
   return Boolean(item.title?.trim())
+}
+
+function topicBadgeLabel(item: TimelineItem): string {
+  if (item.topicType) {
+    return TOPIC_TYPE_LABELS[item.topicType]
+  }
+
+  return isSemantic(item) ? '话题' : '观众反应信号'
 }
 
 function itemTitle(item: TimelineItem): string {
@@ -695,7 +712,7 @@ watch(
 
               <span class="timeline-copy">
                 <span class="timeline-kind">
-                  <span class="importance-badge">{{ isSemantic(item) ? '话题' : '观众反应信号' }}</span>
+                  <span class="importance-badge">{{ topicBadgeLabel(item) }}</span>
                   <span v-if="isImportant(item)" class="importance-badge strong">重点</span>
                 </span>
                 <strong class="timeline-title">{{ itemTitle(item) }}</strong>

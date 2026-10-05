@@ -67,14 +67,18 @@ def _prepare(db_path: Path) -> dict:
         p0_id = insert_stream_part(
             connection,
             StreamPart(
-                stream_id="stream-1", part_id="p0", start_offset_ms=0,
+                stream_id="stream-1",
+                part_id="p0",
+                start_offset_ms=0,
                 duration_ms=100_000,
             ),
         )
         p1_id = insert_stream_part(
             connection,
             StreamPart(
-                stream_id="stream-1", part_id="p1", start_offset_ms=100_000,
+                stream_id="stream-1",
+                part_id="p1",
+                start_offset_ms=100_000,
                 duration_ms=120_000,
             ),
         )
@@ -86,15 +90,20 @@ def _prepare(db_path: Path) -> dict:
             )
         danmaku_ids = [
             connection.execute(
-                "SELECT id FROM danmaku WHERE stream_part_id = ?", (part_db_id,)
+                "SELECT id FROM danmaku WHERE stream_part_id = ?",
+                (part_db_id,),
             ).fetchone()[0]
             for part_db_id in (p0_id, p1_id)
         ]
         transcripts = [
             TranscriptSegment(
-                stream_id="stream-1", part_id=part_id,
-                start_ms=1_000, end_ms=2_000,
-                raw_text="原始字幕", text="字幕", source="test",
+                stream_id="stream-1",
+                part_id=part_id,
+                start_ms=1_000,
+                end_ms=2_000,
+                raw_text="原始字幕",
+                text="字幕",
+                source="test",
             )
             for part_id in ("p0", "p1")
         ]
@@ -110,7 +119,8 @@ def _prepare(db_path: Path) -> dict:
         replace_highlights_for_stream(connection, "stream-1", highlights)
         reaction_matches = [
             ReactionMatch(
-                stream_id="stream-1", part_id=highlight.part_id,
+                stream_id="stream-1",
+                part_id=highlight.part_id,
                 highlight_id=highlight.id,
                 transcript_segment_ids=[transcripts[part_index].id],
                 danmaku_ids=[danmaku_ids[part_index]],
@@ -125,21 +135,33 @@ def _prepare(db_path: Path) -> dict:
             stream_id="stream-1",
             source_part_ids=["p0", "p1"],
             reaction_match_ids=[item.id for item in reaction_matches[:3]],
-            start_ms=20_000, end_ms=145_000,
-            title="第一段话题", summary="来自已保存的话题摘要",
-            keywords=["话题"], entities=["Aza"],
+            start_ms=20_000,
+            end_ms=145_000,
+            topic_type="talk",
+            title="第一段话题",
+            summary="来自已保存的话题摘要",
+            keywords=["话题"],
+            entities=["Aza"],
             transcript_segment_ids=[item.id for item in transcripts],
-            salience_score=0.96, confidence=0.82, analyzer_version="test",
+            salience_score=0.96,
+            confidence=0.82,
+            analyzer_version="test",
         )
         second = TopicSegment(
             stream_id="stream-1",
             source_part_ids=["p1"],
             reaction_match_ids=[reaction_matches[3].id],
-            start_ms=150_000, end_ms=190_000,
-            title="第二段话题", summary="另一段摘要",
-            keywords=[], entities=[],
+            start_ms=150_000,
+            end_ms=190_000,
+            topic_type="interaction",
+            title="第二段话题",
+            summary="另一段摘要",
+            keywords=[],
+            entities=[],
             transcript_segment_ids=[transcripts[1].id],
-            salience_score=0.77, confidence=0.8, analyzer_version="test",
+            salience_score=0.77,
+            confidence=0.8,
+            analyzer_version="test",
         )
         # Insert in reverse order to verify the public timeline order.
         insert_topic_segment(connection, second)
@@ -156,7 +178,8 @@ def _prepare(db_path: Path) -> dict:
 
 
 def test_topic_timeline_api_projects_persisted_semantics_and_evidence(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     db_path = tmp_path / "timeline.db"
     data = _prepare(db_path)
@@ -169,7 +192,8 @@ def test_topic_timeline_api_projects_persisted_semantics_and_evidence(
     assert payload["durationMs"] == 220_000
     assert payload["mergeGapMs"] == 0
     assert [item["id"] for item in payload["items"]] == [
-        data["first"].id, data["second"].id,
+        data["first"].id,
+        data["second"].id,
     ]
 
     first = payload["items"][0]
@@ -181,6 +205,7 @@ def test_topic_timeline_api_projects_persisted_semantics_and_evidence(
     assert first["keywords"] == ["话题"]
     assert first["entities"] == ["Aza"]
     assert first["salienceScore"] == 0.96
+    assert first["topicType"] == "talk"
     assert first["sourceHighlightIds"] == [
         item.id for item in data["highlights"][:3]
     ]
@@ -191,10 +216,12 @@ def test_topic_timeline_api_projects_persisted_semantics_and_evidence(
     assert first["evidenceRefs"] == [
         reference
         for reaction_match, highlight in zip(
-            data["reaction_matches"][:3], data["highlights"][:3]
+            data["reaction_matches"][:3],
+            data["highlights"][:3],
         )
         for reference in (
-            f"reaction_match:{reaction_match.id}", f"highlight:{highlight.id}"
+            f"reaction_match:{reaction_match.id}",
+            f"highlight:{highlight.id}",
         )
     ] + [f"transcript:{item.id}" for item in data["transcripts"]]
 
@@ -215,7 +242,8 @@ def test_topic_timeline_sorts_and_uses_topic_end_when_part_duration_is_missing(
             topic_segments=[data["second"], data["first"]],
         )
         assert [item.id for item in timeline.items] == [
-            data["first"].id, data["second"].id,
+            data["first"].id,
+            data["second"].id,
         ]
         assert timeline.duration_ms == 190_000
     finally:
@@ -224,7 +252,9 @@ def test_topic_timeline_sorts_and_uses_topic_end_when_part_duration_is_missing(
 
 @pytest.mark.parametrize("missing_table", [False, True])
 def test_timeline_api_falls_back_when_no_topic_segments(
-    tmp_path: Path, monkeypatch, missing_table: bool,
+    tmp_path: Path,
+    monkeypatch,
+    missing_table: bool,
 ) -> None:
     db_path = tmp_path / "timeline.db"
     _prepare(db_path)
@@ -235,7 +265,10 @@ def test_timeline_api_falls_back_when_no_topic_segments(
             connection.execute("DROP TABLE topic_segments")
         connection.commit()
         if not missing_table:
-            assert list_topic_segments_by_stream(connection, stream_id="stream-1") == []
+            assert list_topic_segments_by_stream(
+                connection,
+                stream_id="stream-1",
+            ) == []
     finally:
         connection.close()
     monkeypatch.setattr(settings, "database_path", db_path)
