@@ -1,9 +1,17 @@
 import sqlite3
-
+from typing import Literal
 from app.repository.reaction_match_repo import get_reaction_match_by_id
 from pydantic import BaseModel, Field
 from app.pipeline.topic_candidate import TopicCandidate
 
+TopicType = Literal[
+    "talk",
+    "interaction",
+    "singing",
+    "gameplay",
+    "reaction",
+    "announcement",
+]
 
 class AnalyzedTopic(BaseModel):
     reaction_match_ids: list[str] = Field(
@@ -13,6 +21,10 @@ class AnalyzedTopic(BaseModel):
     transcript_segment_ids: list[str] = Field(
         min_length=1,
         description="直接支撑当前话题语义的 TranscriptSegment ID 列表",
+    )
+    
+    topic_type: TopicType = Field(
+        description="当前话题的一级内容分类",
     )
 
     title: str = Field(

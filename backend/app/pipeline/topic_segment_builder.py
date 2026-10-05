@@ -139,6 +139,7 @@ def build_topic_segments(
                 ),
                 salience_score=salience_score,
                 confidence=topic.confidence,
+                topic_type=topic.topic_type,
                 analyzer_version=(
                     TOPIC_ANALYZER_VERSION
                 ),

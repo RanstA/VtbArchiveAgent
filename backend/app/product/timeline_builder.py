@@ -3,7 +3,7 @@
 import sqlite3
 from dataclasses import dataclass
 
-from app.domain.pipeline.topic_segment import TopicSegment
+from app.domain.pipeline.topic_segment import TopicSegment,TopicType
 from app.repository.highlight_repo import get_highlight_by_id
 from app.repository.reaction_match_repo import get_reaction_match_by_id
 from app.repository.stream_part_repo import list_stream_parts
@@ -20,6 +20,7 @@ class TopicTimelineItem:
     anchor_ms: int
     local_anchor_ms: int
     salience_score: float
+    topic_type: TopicType
     title: str
     summary: str
     keywords: list[str]
@@ -112,6 +113,7 @@ def build_topic_segment_timeline(
                 anchor_ms=int(part["start_offset_ms"]) + anchor_highlight.peak_ms,
                 local_anchor_ms=anchor_highlight.peak_ms,
                 salience_score=topic.salience_score,
+                topic_type=topic.topic_type,
                 title=topic.title,
                 summary=topic.summary,
                 keywords=topic.keywords,

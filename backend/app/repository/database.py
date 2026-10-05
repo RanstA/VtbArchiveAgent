@@ -778,8 +778,21 @@ def init_db(
             start_ms INTEGER NOT NULL,
             end_ms INTEGER NOT NULL,
 
+            topic_type TEXT NOT NULL,
+
             title TEXT NOT NULL,
             summary TEXT NOT NULL,
+
+            CHECK (
+                topic_type IN (
+                    'talk',
+                    'interaction',
+                    'singing',
+                    'gameplay',
+                    'reaction',
+                    'announcement'
+                )
+            ),
 
             salience_score REAL NOT NULL,
             confidence REAL NOT NULL,

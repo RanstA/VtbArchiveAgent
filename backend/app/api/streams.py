@@ -39,6 +39,9 @@ from app.product.timeline_builder import (
 from app.event_pipeline.timeline import (
     build_stream_timeline,
 )
+from app.domain.pipeline.topic_segment import (
+    TopicType,
+)
 
 router = APIRouter(
     prefix="/streams",
@@ -101,17 +104,17 @@ class TimelineItemResponse(BaseModel):
     id: str
 
     streamId: str
-
     sourcePartIds: list[str]
 
     startMs: int
     endMs: int
     anchorMs: int
-
     localAnchorMs: int
 
     salienceScore: float
-    
+
+    topicType: TopicType | None = None
+
     title: str | None = None
     summary: str | None = None
 
@@ -119,7 +122,6 @@ class TimelineItemResponse(BaseModel):
     entities: list[str]
 
     evidenceRefs: list[str]
-
     sourceHighlightIds: list[str]
 
 
@@ -321,9 +323,12 @@ def get_stream_timeline(
 
     try:
         # Older archives may predate the V1 TopicSegment table entirely.
-        has_topic_table = connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'topic_segments'"
-        ).fetchone() is not None
+        has_topic_table = (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'topic_segments'"
+            ).fetchone()
+            is not None
+        )
         topic_segments = (
             list_topic_segments_by_stream(connection, stream_id=stream_id)
             if has_topic_table
@@ -367,6 +372,11 @@ def get_stream_timeline(
                     keywords=item.keywords,
                     entities=item.entities,
                     evidenceRefs=item.evidence_refs,
+                    topicType=getattr(
+                        item,
+                        "topic_type",
+                        None,
+                    ),
                 )
                 for item in timeline.items
             ],

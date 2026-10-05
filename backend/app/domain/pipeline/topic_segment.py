@@ -1,7 +1,15 @@
 import uuid
-
+from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
+TopicType = Literal[
+    "talk",
+    "interaction",
+    "singing",
+    "gameplay",
+    "reaction",
+    "announcement",
+]
 
 def make_topic_segment_id() -> str:
     """
@@ -91,6 +99,10 @@ class TopicSegment(BaseModel):
     analyzer_version: str = Field(
         min_length=1,
         description="生成当前 TopicSegment 时使用的话题分析算法或模型版本",
+    )
+    
+    topic_type: TopicType = Field(
+        description="当前话题的一级内容分类",
     )
 
     @model_validator(mode="after")

@@ -14,9 +14,7 @@ def _validate_no_duplicates(
     field_name: str,
 ) -> None:
     if len(values) != len(set(values)):
-        raise ValueError(
-            f"duplicate {field_name}"
-        )
+        raise ValueError(f"duplicate {field_name}")
 
 
 def _validate_topic_segment(
@@ -66,10 +64,7 @@ def _validate_topic_segment(
     ).fetchone()
 
     if stream_row is None:
-        raise ValueError(
-            "stream does not exist: "
-            f"{topic_segment.stream_id}"
-        )
+        raise ValueError("stream does not exist: " f"{topic_segment.stream_id}")
 
     available_part_rows = connection.execute(
         """
@@ -81,17 +76,12 @@ def _validate_topic_segment(
         (topic_segment.stream_id,),
     ).fetchall()
 
-    available_part_ids = {
-        row[0]
-        for row in available_part_rows
-    }
+    available_part_ids = {row[0] for row in available_part_rows}
 
     for part_id in topic_segment.source_part_ids:
         if part_id not in available_part_ids:
             raise ValueError(
-                "StreamPart does not belong to "
-                "topic segment stream: "
-                f"{part_id}"
+                "StreamPart does not belong to " "topic segment stream: " f"{part_id}"
             )
 
     expected_part_ids: list[str] = []
@@ -104,10 +94,7 @@ def _validate_topic_segment(
         )
 
         if reaction_match is None:
-            raise ValueError(
-                "reaction match does not exist: "
-                f"{reaction_match_id}"
-            )
+            raise ValueError("reaction match does not exist: " f"{reaction_match_id}")
 
         if reaction_match.stream_id != topic_segment.stream_id:
             raise ValueError(
@@ -117,23 +104,14 @@ def _validate_topic_segment(
             )
 
         if reaction_match.part_id not in expected_part_ids:
-            expected_part_ids.append(
-                reaction_match.part_id
-            )
+            expected_part_ids.append(reaction_match.part_id)
 
-        allowed_transcript_ids.update(
-            reaction_match.transcript_segment_ids
-        )
+        allowed_transcript_ids.update(reaction_match.transcript_segment_ids)
 
     if topic_segment.source_part_ids != expected_part_ids:
-        raise ValueError(
-            "source_part_ids do not match "
-            "reaction match parts"
-        )
+        raise ValueError("source_part_ids do not match " "reaction match parts")
 
-    for transcript_segment_id in (
-        topic_segment.transcript_segment_ids
-    ):
+    for transcript_segment_id in topic_segment.transcript_segment_ids:
         if transcript_segment_id not in allowed_transcript_ids:
             raise ValueError(
                 "transcript segment is not supported "
@@ -154,8 +132,7 @@ def _validate_topic_segment(
 
         if row is None:
             raise ValueError(
-                "transcript segment does not exist: "
-                f"{transcript_segment_id}"
+                "transcript segment does not exist: " f"{transcript_segment_id}"
             )
 
         if row[0] != topic_segment.stream_id:
@@ -184,19 +161,21 @@ def _insert_rows(
             stream_id,
             start_ms,
             end_ms,
+            topic_type,
             title,
             summary,
             salience_score,
             confidence,
             analyzer_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             topic_segment.id,
             topic_segment.stream_id,
             topic_segment.start_ms,
             topic_segment.end_ms,
+            topic_segment.topic_type,
             topic_segment.title,
             topic_segment.summary,
             topic_segment.salience_score,
@@ -220,9 +199,7 @@ def _insert_rows(
                 part_id,
                 position,
             )
-            for position, part_id in enumerate(
-                topic_segment.source_part_ids
-            )
+            for position, part_id in enumerate(topic_segment.source_part_ids)
         ],
     )
 
@@ -283,9 +260,7 @@ def _insert_rows(
                 keyword,
                 position,
             )
-            for position, keyword in enumerate(
-                topic_segment.keywords
-            )
+            for position, keyword in enumerate(topic_segment.keywords)
         ],
     )
 
@@ -304,9 +279,7 @@ def _insert_rows(
                 entity,
                 position,
             )
-            for position, entity in enumerate(
-                topic_segment.entities
-            )
+            for position, entity in enumerate(topic_segment.entities)
         ],
     )
 
@@ -338,6 +311,7 @@ def get_topic_segment_by_id(
             stream_id,
             start_ms,
             end_ms,
+            topic_type,
             title,
             summary,
             salience_score,
@@ -405,33 +379,19 @@ def get_topic_segment_by_id(
     return TopicSegment(
         id=row[0],
         stream_id=row[1],
-        source_part_ids=[
-            item[0]
-            for item in part_rows
-        ],
-        reaction_match_ids=[
-            item[0]
-            for item in reaction_match_rows
-        ],
+        source_part_ids=[item[0] for item in part_rows],
+        reaction_match_ids=[item[0] for item in reaction_match_rows],
         start_ms=row[2],
         end_ms=row[3],
-        title=row[4],
-        summary=row[5],
-        keywords=[
-            item[0]
-            for item in keyword_rows
-        ],
-        entities=[
-            item[0]
-            for item in entity_rows
-        ],
-        transcript_segment_ids=[
-            item[0]
-            for item in transcript_rows
-        ],
-        salience_score=row[6],
-        confidence=row[7],
-        analyzer_version=row[8],
+        topic_type=row[4],
+        title=row[5],
+        summary=row[6],
+        keywords=[item[0] for item in keyword_rows],
+        entities=[item[0] for item in entity_rows],
+        transcript_segment_ids=[item[0] for item in transcript_rows],
+        salience_score=row[7],
+        confidence=row[8],
+        analyzer_version=row[9],
     )
 
 
@@ -462,9 +422,7 @@ def list_topic_segments_by_stream(
         )
 
         if topic_segment is not None:
-            results.append(
-                topic_segment
-            )
+            results.append(topic_segment)
 
     return results
 
@@ -480,24 +438,14 @@ def replace_topic_segments_for_stream(
 
     for topic_segment in topic_segments:
         if topic_segment.stream_id != stream_id:
-            raise ValueError(
-                "all topic segments must belong "
-                "to target stream"
-            )
+            raise ValueError("all topic segments must belong " "to target stream")
 
         if topic_segment.id in seen_segment_ids:
-            raise ValueError(
-                "duplicate topic segment id: "
-                f"{topic_segment.id}"
-            )
+            raise ValueError("duplicate topic segment id: " f"{topic_segment.id}")
 
-        seen_segment_ids.add(
-            topic_segment.id
-        )
+        seen_segment_ids.add(topic_segment.id)
 
-        for reaction_match_id in (
-            topic_segment.reaction_match_ids
-        ):
+        for reaction_match_id in topic_segment.reaction_match_ids:
             if reaction_match_id in seen_reaction_match_ids:
                 raise ValueError(
                     "reaction match appears in multiple "
@@ -505,9 +453,7 @@ def replace_topic_segments_for_stream(
                     f"{reaction_match_id}"
                 )
 
-            seen_reaction_match_ids.add(
-                reaction_match_id
-            )
+            seen_reaction_match_ids.add(reaction_match_id)
 
         _validate_topic_segment(
             connection,
