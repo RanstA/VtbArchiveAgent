@@ -30,6 +30,12 @@ from app.repository.stream_repo import (
     get_stream_by_id,
     list_streams,
 )
+from app.repository.topic_segment_repo import (
+    list_topic_segments_by_stream,
+)
+from app.product.timeline_builder import (
+    build_topic_segment_timeline,
+)
 from app.event_pipeline.timeline import (
     build_stream_timeline,
 )
@@ -314,10 +320,26 @@ def get_stream_timeline(
     connection = connect_db(settings.database_path)
 
     try:
-        timeline = build_stream_timeline(
-            connection=connection,
-            stream_id=stream_id,
+        # Older archives may predate the V1 TopicSegment table entirely.
+        has_topic_table = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'topic_segments'"
+        ).fetchone() is not None
+        topic_segments = (
+            list_topic_segments_by_stream(connection, stream_id=stream_id)
+            if has_topic_table
+            else []
         )
+        if topic_segments:
+            timeline = build_topic_segment_timeline(
+                connection,
+                stream_id=stream_id,
+                topic_segments=topic_segments,
+            )
+        else:
+            timeline = build_stream_timeline(
+                connection=connection,
+                stream_id=stream_id,
+            )
 
         if timeline is None:
             raise HTTPException(

@@ -499,12 +499,12 @@ watch(
             </span>
 
             <h2>
-              直播事件时间轴
+              直播话题时间轴
             </h2>
           </div>
 
           <span>
-            语义事件与观众反应片段 · 整场时间
+            话题与观众反应片段 · 整场时间
           </span>
         </div>
 
@@ -603,7 +603,7 @@ watch(
           <div class="timeline-legend">
             <span>
               <i class="semantic"></i>
-              语义事件
+              话题
             </span>
             <span>
               <i class="fallback"></i>
@@ -690,7 +690,7 @@ watch(
 
               <span class="timeline-copy">
                 <span class="timeline-kind">
-                  <span class="importance-badge">{{ isSemantic(item) ? '语义事件' : '观众反应信号' }}</span>
+                  <span class="importance-badge">{{ isSemantic(item) ? '话题' : '观众反应信号' }}</span>
                   <span v-if="isImportant(item)" class="importance-badge strong">重点</span>
                 </span>
                 <strong class="timeline-title">{{ itemTitle(item) }}</strong>
