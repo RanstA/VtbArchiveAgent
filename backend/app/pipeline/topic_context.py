@@ -34,7 +34,14 @@ def _format_reaction_context(
     lines.append("[TRANSCRIPT]")
 
     for item in context.transcripts:
-        lines.append(f"{item.start_ms}" f"-" f"{item.end_ms}" f" | " f"{item.text}")
+        lines.append(
+            f"{item.id} | "
+            f"{item.start_ms}"
+            f"-"
+            f"{item.end_ms}"
+            f" | "
+            f"{item.text}"
+        )
 
     lines.append("")
     lines.append("[AUDIENCE_REACTIONS]")

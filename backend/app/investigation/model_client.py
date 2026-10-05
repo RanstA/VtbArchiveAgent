@@ -6,25 +6,20 @@ from typing import Any
 import httpx
 
 
-class ModelClientError(
-    RuntimeError
-):
+class ModelClientError(RuntimeError):
     pass
 
 
-@dataclass(
-    frozen=True
-)
+@dataclass(frozen=True)
 class OpenAICompatibleChatClient:
     base_url: str
     model: str
 
-    api_key: (
-        str
-        | None
-    ) = None
+    api_key: str | None = None
 
     timeout_seconds: float = 60.0
+
+    extra_body: dict[str, Any] | None = None
 
     def complete(
         self,
@@ -32,39 +27,24 @@ class OpenAICompatibleChatClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        endpoint = (
-            self.base_url
-            .rstrip("/")
-            + "/chat/completions"
-        )
+        endpoint = self.base_url.rstrip("/") + "/chat/completions"
 
         headers = {
-            "Content-Type": (
-                "application/json"
-            ),
+            "Content-Type": ("application/json"),
         }
 
-        if (
-            self.api_key
-            and self.api_key.strip()
-        ):
-            headers[
-                "Authorization"
-            ] = (
-                "Bearer "
-                + self.api_key.strip()
-            )
+        if self.api_key and self.api_key.strip():
+            headers["Authorization"] = "Bearer " + self.api_key.strip()
 
         payload = {
-            "model": (
-                self.model
-            ),
-            "messages": (
-                messages
-            ),
+            "model": (self.model),
+            "messages": (messages),
             "temperature": 1,
         }
-        
+
+        if self.extra_body:
+            payload.update(self.extra_body)
+
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
@@ -74,9 +54,7 @@ class OpenAICompatibleChatClient:
                 endpoint,
                 headers=headers,
                 json=payload,
-                timeout=(
-                    self.timeout_seconds
-                ),
+                timeout=(self.timeout_seconds),
             )
 
             response.raise_for_status()
@@ -89,19 +67,11 @@ class OpenAICompatibleChatClient:
             ) from exc
 
         try:
-            body = (
-                response.json()
-            )
+            body = response.json()
 
-            choices = body[
-                "choices"
-            ]
+            choices = body["choices"]
 
-            message = (
-                choices[0][
-                    "message"
-                ]
-            )
+            message = choices[0]["message"]
 
         except (
             KeyError,
@@ -110,16 +80,13 @@ class OpenAICompatibleChatClient:
             ValueError,
         ) as exc:
             raise ModelClientError(
-                "Invalid OpenAI-compatible "
-                "model response"
+                "Invalid OpenAI-compatible " "model response"
             ) from exc
 
         if not isinstance(
             message,
             dict,
         ):
-            raise ModelClientError(
-                "Model message must be an object"
-            )
+            raise ModelClientError("Model message must be an object")
 
         return message

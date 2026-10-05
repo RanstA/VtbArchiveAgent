@@ -4,8 +4,15 @@ from app.pipeline.topic_candidate import TopicCandidate
 
 class AnalyzedTopic(BaseModel):
     reaction_match_ids: list[str] = Field(
-        min_length=1, description=("被判断为属于同一语义话题的 ReactionMatch ID 列表")
+        min_length=1, description=("属于当前话题的连续 ReactionMatch ID 列表")
     )
+    
+    
+    transcript_segment_ids: list[str] = Field(
+        min_length=1,
+        description="直接支撑当前话题语义的 TranscriptSegment ID 列表",
+    )
+    
     title: str = Field(
         min_length=1,
         description="话题的简短标题",
