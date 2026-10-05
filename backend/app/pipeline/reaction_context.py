@@ -7,6 +7,7 @@ from app.repository.danmaku_repo import get_danmaku_by_ids
 from app.repository.transcript_segment_repo import get_transcript_segments_by_ids
 from app.domain.evidence.danmaku import Danmaku
 from app.domain.evidence.transcript_segment import TranscriptSegment
+from app.repository.highlight_repo import get_highlight_by_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,10 @@ class ReactionContext:
     highlight_id: str
     stream_id: str
     part_id: str
+
+    highlight_start_ms: int
+    highlight_end_ms: int
+    highlight_peak_ms: int
 
     transcripts: list[TranscriptSegment]
     reaction_groups: list[DanmakuReactionGroup]
@@ -108,6 +113,11 @@ def build_reaction_context(
         transcript_segment_ids=(reaction_match.transcript_segment_ids),
     )
 
+    highlight = get_highlight_by_id(connection, reaction_match.highlight_id)
+
+    if highlight is None:
+        raise ValueError("highlight does not exist: " f"{reaction_match.highlight_id}")
+
     danmaku = get_danmaku_by_ids(
         connection,
         danmaku_ids=reaction_match.danmaku_ids,
@@ -126,6 +136,9 @@ def build_reaction_context(
         highlight_id=reaction_match.highlight_id,
         stream_id=reaction_match.stream_id,
         part_id=reaction_match.part_id,
+        highlight_start_ms=highlight.start_ms,
+        highlight_end_ms=highlight.end_ms,
+        highlight_peak_ms=highlight.peak_ms,
         transcripts=transcripts,
         reaction_groups=reaction_groups,
         raw_danmaku_count=len(danmaku),

@@ -11,32 +11,30 @@ from app.repository.reaction_match_repo import (
     get_reaction_match_by_id,
 )
 
+
 def _format_reaction_context(
     context: ReactionContext,
 ) -> str:
     lines: list[str] = []
 
-    lines.append(
-        f"REACTION_MATCH_ID: "
-        f"{context.reaction_match_id}"
-    )
+    lines.append(f"REACTION_MATCH_ID: " f"{context.reaction_match_id}")
+
+    lines.append(f"PART_ID: " f"{context.part_id}")
 
     lines.append(
-        f"PART_ID: "
-        f"{context.part_id}"
+        "HIGHLIGHT_WINDOW: "
+        f"{context.highlight_start_ms}"
+        "-"
+        f"{context.highlight_end_ms}"
     )
+
+    lines.append("HIGHLIGHT_PEAK: " f"{context.highlight_peak_ms}")
 
     lines.append("")
     lines.append("[TRANSCRIPT]")
 
     for item in context.transcripts:
-        lines.append(
-            f"{item.start_ms}"
-            f"-"
-            f"{item.end_ms}"
-            f" | "
-            f"{item.text}"
-        )
+        lines.append(f"{item.start_ms}" f"-" f"{item.end_ms}" f" | " f"{item.text}")
 
     lines.append("")
     lines.append("[AUDIENCE_REACTIONS]")
@@ -53,13 +51,9 @@ def _format_reaction_context(
         )
 
     lines.append("")
-    lines.append(
-        "RAW_DANMAKU_COUNT: "
-        f"{context.raw_danmaku_count}"
-    )
+    lines.append("RAW_DANMAKU_COUNT: " f"{context.raw_danmaku_count}")
 
     return "\n".join(lines)
-
 
 
 def build_topic_candidate_context(
@@ -73,30 +67,20 @@ def build_topic_candidate_context(
         candidate.reaction_match_ids,
         start=1,
     ):
-        reaction_match = (
-            get_reaction_match_by_id(
-                connection,
-                reaction_match_id,
-            )
+        reaction_match = get_reaction_match_by_id(
+            connection,
+            reaction_match_id,
         )
 
         if reaction_match is None:
-            raise ValueError(
-                "reaction match does not exist: "
-                f"{reaction_match_id}"
-            )
+            raise ValueError("reaction match does not exist: " f"{reaction_match_id}")
 
         context = build_reaction_context(
             connection,
             reaction_match=reaction_match,
         )
 
-        block = (
-            f"=== REACTION #{index} ===\n"
-            + _format_reaction_context(
-                context
-            )
-        )
+        block = f"=== REACTION #{index} ===\n" + _format_reaction_context(context)
 
         blocks.append(block)
 
