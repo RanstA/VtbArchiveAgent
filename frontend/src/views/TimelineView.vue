@@ -38,6 +38,14 @@ const TOPIC_TYPE_LABELS: Record<TopicType, string> = {
   reaction: 'Reaction',
   announcement: '公告',
 }
+const TOPIC_TYPES: TopicType[] = [
+  'talk',
+  'interaction',
+  'singing',
+  'gameplay',
+  'reaction',
+  'announcement',
+]
 
 
 const route =
@@ -60,6 +68,8 @@ const activeItemId =
     string
     | undefined
   >()
+
+const selectedTopicType = ref<'all' | TopicType>('all')
 
 const loading =
   ref(true)
@@ -84,6 +94,25 @@ const items =
           - second.startMs,
       ),
   )
+
+const hasTopicTypes = computed(() =>
+  items.value.some((item) => item.topicType != null),
+)
+
+const filteredItems = computed(() =>
+  selectedTopicType.value === 'all'
+    ? items.value
+    : items.value.filter((item) => item.topicType === selectedTopicType.value),
+)
+
+watch(selectedTopicType, () => {
+  if (
+    activeItemId.value
+    && !filteredItems.value.some((item) => item.id === activeItemId.value)
+  ) {
+    activeItemId.value = undefined
+  }
+})
 
 
 const duration =
@@ -154,6 +183,10 @@ const importantItems =
           ),
       ),
   )
+
+const filteredImportantItems = computed(() =>
+  filteredItems.value.filter(isImportant),
+)
 
 
 function isImportant(
@@ -336,6 +369,7 @@ async function loadTimeline() {
   stream.value = undefined
   timeline.value = undefined
   activeItemId.value = undefined
+  selectedTopicType.value = 'all'
 
   try {
     const streamId =
@@ -582,7 +616,7 @@ watch(
 
         <div v-if="items.length" class="timeline-map">
           <div class="timeline-track">
-            <button v-for="item in items" :key="item.id" type="button" class="timeline-marker" :class="{
+            <button v-for="item in filteredItems" :key="item.id" type="button" class="timeline-marker" :class="{
               semantic: isSemantic(item),
               fallback: !isSemantic(item),
               important:
@@ -641,6 +675,15 @@ watch(
               }}
             </span>
           </div>
+
+          <div v-if="hasTopicTypes" class="topic-filter" role="group" aria-label="按话题分类筛选">
+            <span class="topic-filter-label">内容筛选</span>
+            <button type="button" class="importance-badge" :class="{ strong: selectedTopicType === 'all' }"
+              :aria-pressed="selectedTopicType === 'all'" @click="selectedTopicType = 'all'">全部</button>
+            <button v-for="topicType in TOPIC_TYPES" :key="topicType" type="button" class="importance-badge"
+              :class="{ strong: selectedTopicType === topicType }" :aria-pressed="selectedTopicType === topicType"
+              @click="selectedTopicType = topicType">{{ TOPIC_TYPE_LABELS[topicType] }}</button>
+          </div>
         </div>
       </section>
 
@@ -659,19 +702,19 @@ watch(
 
           <span>
             {{
-              items.length
+              filteredItems.length
             }}
             个时间线片段 ·
             {{
-              importantItems.length
+              filteredImportantItems.length
             }}
             个重点
           </span>
         </header>
 
 
-        <div v-if="items.length" class="timeline-list">
-          <article v-for="item in items" :id="`timeline-${item.id}`
+        <div v-if="filteredItems.length" class="timeline-list">
+          <article v-for="item in filteredItems" :id="`timeline-${item.id}`
             " :key="item.id" class="timeline-card" tabindex="-1" :class="{
               semantic: isSemantic(item),
               fallback: !isSemantic(item),
@@ -844,8 +887,7 @@ watch(
 
 
         <div v-else class="empty-panel">
-          该直播已有档案，
-          但暂未检测到 Timeline Item。
+          {{ items.length ? '该分类下暂无时间线片段。' : '该直播已有档案，但暂未检测到 Timeline Item。' }}
         </div>
       </section>
     </template>
@@ -1090,6 +1132,38 @@ watch(
 
   background:
     var(--accent);
+}
+
+.topic-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.topic-filter-label {
+  margin-right: 8px;
+  color: var(--faint);
+  font: 600 .66rem/1 ui-monospace, monospace;
+  letter-spacing: .08em;
+}
+
+.topic-filter button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.topic-filter button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.topic-filter button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 
