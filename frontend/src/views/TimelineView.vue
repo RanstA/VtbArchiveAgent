@@ -28,6 +28,7 @@ import {
 
 
 const IMPORTANT_THRESHOLD = 0.95
+const REPLAY_LEAD_MS = 20_000
 
 
 const route =
@@ -250,7 +251,11 @@ function buildBilibiliJumpUrl(
 
   const seconds =
     Math.floor(
-      item.localAnchorMs
+      Math.max(
+        0,
+        item.localAnchorMs
+        - REPLAY_LEAD_MS,
+      )
       / 1000,
     )
 
