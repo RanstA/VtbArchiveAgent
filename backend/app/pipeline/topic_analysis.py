@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from app.pipeline.topic_candidate import TopicCandidate
 
 
-class AnalyzedTopic:
+class AnalyzedTopic(BaseModel):
     reaction_match_ids: list[str] = Field(
         min_length=1, description=("被判断为属于同一语义话题的 ReactionMatch ID 列表")
     )
@@ -22,7 +22,7 @@ class AnalyzedTopic:
     )
 
 
-class TopicAnalysisResult:
+class TopicAnalysisResult(BaseModel):
     topics: list[AnalyzedTopic] = Field(
         min_length=1, description=("当前 TopicCandidate " "经过语义分析得到的话题列表")
     )
