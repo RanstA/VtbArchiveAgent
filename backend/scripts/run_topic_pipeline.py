@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 from app.config.settings import settings
@@ -25,10 +26,6 @@ from app.repository.topic_segment_repo import (
     replace_topic_segments_for_stream,
 )
 
-DB_PATH = Path("aza_demo_v1.db")
-
-STREAM_ID = "c05f34e0-b116-5671-8013-5d63f144ca70"
-
 
 def format_ms(
     value: int,
@@ -43,6 +40,25 @@ def format_ms(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=("Run Topic Pipeline for " "a specified Stream.")
+    )
+
+    parser.add_argument(
+        "--db",
+        type=Path,
+        required=True,
+        help="SQLite database path",
+    )
+
+    parser.add_argument(
+        "--stream-id",
+        required=True,
+        help="Target Stream ID",
+    )
+
+    args = parser.parse_args()
+
     if not settings.event_scout_api_base_url:
         raise RuntimeError("EVENT_SCOUT_API_BASE_URL " "is not configured")
 
@@ -66,19 +82,19 @@ def main() -> None:
         model=model,
     )
 
-    connection = connect_db(DB_PATH)
+    connection = connect_db(args.db)
 
     try:
         init_db(connection)
 
         reaction_matches = list_reaction_matches_by_stream(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
         )
 
         candidates = build_topic_candidates(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
         )
 
         print(
@@ -97,7 +113,7 @@ def main() -> None:
 
         segments = build_topic_segments_for_stream(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
             analyzer=analyzer,
         )
 
@@ -111,13 +127,13 @@ def main() -> None:
 
         replace_topic_segments_for_stream(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
             topic_segments=segments,
         )
 
         persisted = list_topic_segments_by_stream(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
         )
 
         assert len(persisted) == len(segments)

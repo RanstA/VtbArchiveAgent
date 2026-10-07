@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 from app.pipeline.reaction_matcher import (
@@ -10,18 +11,38 @@ from app.repository.reaction_match_repo import (
     list_reaction_matches_by_stream,
 )
 
-DB_PATH = Path("aza_demo_v1.db")
-
-STREAM_ID = "c05f34e0-b116-5671-8013-5d63f144ca70"
-
 
 def main() -> None:
-    connection = connect_db(DB_PATH)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build ReactionMatches for "
+            "a specified Stream."
+        )
+    )
+
+    parser.add_argument(
+        "--db",
+        type=Path,
+        required=True,
+        help="SQLite database path",
+    )
+
+    parser.add_argument(
+        "--stream-id",
+        required=True,
+        help="Target Stream ID",
+    )
+
+    args = parser.parse_args()
+
+    connection = connect_db(
+        args.db
+    )
 
     try:
         matches = build_reaction_matches(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
         )
 
         print(
@@ -31,7 +52,7 @@ def main() -> None:
 
         persisted = list_reaction_matches_by_stream(
             connection,
-            stream_id=STREAM_ID,
+            stream_id=args.stream_id,
         )
 
         print(
@@ -47,27 +68,40 @@ def main() -> None:
             start=1,
         ):
             print()
-            print(f"ReactionMatch #{index}")
+
+            print(
+                f"ReactionMatch #{index}"
+            )
+
             print(
                 "  id:",
                 match.id,
             )
+
             print(
                 "  part:",
                 match.part_id,
             )
+
             print(
                 "  highlight:",
                 match.highlight_id,
             )
+
             print(
                 "  transcripts:",
-                len(match.transcript_segment_ids),
+                len(
+                    match.transcript_segment_ids
+                ),
             )
+
             print(
                 "  danmaku:",
-                len(match.danmaku_ids),
+                len(
+                    match.danmaku_ids
+                ),
             )
+
             print(
                 "  matcher:",
                 match.matcher_version,
