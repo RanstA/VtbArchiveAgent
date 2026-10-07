@@ -17,8 +17,8 @@ class CorrectionProposal(BaseModel):
     target_type: Literal["topic_segment", "stream"]
     target_id: str = Field(min_length=1)
     supplemental_evidence_ids: list[str] = Field(min_length=1)
-    proposal: str
-    reason: str
+    proposal: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
     status: Literal["pending", "accepted", "rejected"] = "pending"
     created_at: datetime
     reviewed_at: datetime | None = None

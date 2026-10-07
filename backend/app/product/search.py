@@ -8,8 +8,8 @@ class SearchHit(BaseModel):
     topic_segment_id: str | None = None
     start_ms: int | None = Field(default=None, ge=0)
     end_ms: int | None = Field(default=None, ge=0)
-    title: str
-    snippet: str
+    title: str = Field(min_length=1)
+    snippet: str = Field(min_length=1)
     score: float
     evidence_ids: list[str] | None = None
 

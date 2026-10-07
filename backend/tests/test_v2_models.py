@@ -70,6 +70,8 @@ def test_correction_proposal_model_defaults_to_pending() -> None:
         {"target_type": "highlight"},
         {"supplemental_evidence_ids": ["same", "same"]},
         {"supplemental_evidence_ids": []},
+        {"proposal": ""},
+        {"reason": ""},
     ],
 )
 def test_correction_proposal_rejects_invalid_input(changes: dict) -> None:
@@ -99,6 +101,18 @@ def test_search_hit_is_a_query_time_dto() -> None:
     )
     assert hit.evidence_ids == ["transcript:segment-1"]
     assert SearchHit.model_validate(hit.model_dump()) == hit
+
+
+@pytest.mark.parametrize("changes", [{"title": ""}, {"snippet": ""}])
+def test_search_hit_rejects_empty_text(changes: dict) -> None:
+    values = {
+        "stream_id": "stream-1",
+        "title": "标题",
+        "snippet": "摘要",
+        "score": 0.5,
+    }
+    with pytest.raises(ValidationError):
+        SearchHit(**(values | changes))
 
 
 @pytest.mark.parametrize(
