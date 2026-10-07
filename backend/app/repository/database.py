@@ -987,6 +987,79 @@ def init_db(
         );
 
 
+        CREATE TABLE IF NOT EXISTS supplemental_evidence (
+            id TEXT PRIMARY KEY,
+            stream_id TEXT NOT NULL,
+            topic_segment_id TEXT,
+            source_type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            source_url TEXT,
+            created_at TEXT NOT NULL,
+
+            CHECK (source_type IN ('user_text', 'fan_summary', 'external_link')),
+            CHECK (content <> ''),
+
+            FOREIGN KEY (stream_id)
+                REFERENCES streams(id),
+            FOREIGN KEY (topic_segment_id)
+                REFERENCES topic_segments(id)
+                ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS
+            idx_supplemental_evidence_stream_created
+        ON supplemental_evidence(stream_id, created_at, id);
+
+        CREATE INDEX IF NOT EXISTS
+            idx_supplemental_evidence_topic_segment
+        ON supplemental_evidence(topic_segment_id);
+
+
+        CREATE TABLE IF NOT EXISTS correction_proposals (
+            id TEXT PRIMARY KEY,
+            stream_id TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            review_note TEXT,
+
+            CHECK (target_type IN ('topic_segment', 'stream')),
+            CHECK (status IN ('pending', 'accepted', 'rejected')),
+
+            FOREIGN KEY (stream_id)
+                REFERENCES streams(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS
+            idx_correction_proposals_stream_created
+        ON correction_proposals(stream_id, created_at, id);
+
+
+        CREATE TABLE IF NOT EXISTS correction_proposal_evidence (
+            correction_proposal_id TEXT NOT NULL,
+            supplemental_evidence_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+
+            PRIMARY KEY (correction_proposal_id, supplemental_evidence_id),
+            UNIQUE (correction_proposal_id, position),
+            CHECK (position >= 0),
+
+            FOREIGN KEY (correction_proposal_id)
+                REFERENCES correction_proposals(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (supplemental_evidence_id)
+                REFERENCES supplemental_evidence(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS
+            idx_correction_proposal_evidence_supplemental
+        ON correction_proposal_evidence(supplemental_evidence_id);
+
+
         CREATE TABLE IF NOT EXISTS events (
 
             id TEXT PRIMARY KEY,
