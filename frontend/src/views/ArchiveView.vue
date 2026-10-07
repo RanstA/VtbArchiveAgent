@@ -43,6 +43,7 @@ const {
 )
 
 const {
+  currentVtuber,
   currentVtuberId,
 } = storeToRefs(
   vtuberStore,
@@ -96,11 +97,11 @@ watch(
     <header class="page-header">
       <div>
         <span class="eyebrow">
-          ARCHIVE INDEX
+          ARCHIVE INDEX / {{ currentVtuber?.id ?? 'VTUBER' }}
         </span>
 
         <h1>
-          直播档案
+          {{ currentVtuber?.displayName ?? '主播' }}的直播档案
         </h1>
       </div>
 

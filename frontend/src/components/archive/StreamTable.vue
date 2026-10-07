@@ -36,7 +36,7 @@ defineProps<{
           </th>
 
           <th>
-            EVENT
+            HIGHLIGHT
           </th>
 
           <th class="align-right">
@@ -117,11 +117,11 @@ defineProps<{
               class="data-status"
               :class="{
                 ready:
-                  stream.hasEvents,
+                  stream.hasHighlights,
               }"
             >
               {{
-                stream.hasEvents
+                stream.hasHighlights
                   ? 'READY'
                   : 'PENDING'
               }}

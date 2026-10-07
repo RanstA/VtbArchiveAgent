@@ -468,7 +468,7 @@ watch(
             .vtuberId,
       },
     }">
-      ← 返回直播档案
+      ← 返回{{ stream?.vtuberName ?? '主播' }}档案
     </RouterLink>
 
 
