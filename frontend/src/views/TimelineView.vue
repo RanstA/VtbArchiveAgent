@@ -105,6 +105,20 @@ const filteredItems = computed(() =>
     : items.value.filter((item) => item.topicType === selectedTopicType.value),
 )
 
+// Research links carry Stream-global milliseconds, never Part-local time.
+const requestedTimeMs = computed(() => {
+  const value = route.query.atMs
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null
+  const time = Number(value)
+  return Number.isSafeInteger(time) && time >= 0 ? time : null
+})
+const requestedItem = computed(() => {
+  const time = requestedTimeMs.value
+  return time === null ? undefined : items.value.find(
+    (item) => item.startMs <= time && time < item.endMs,
+  )
+})
+
 watch(selectedTopicType, () => {
   if (
     activeItemId.value
@@ -452,6 +466,12 @@ watch(
   () => { void loadTimeline() },
   { immediate: true },
 )
+
+watch([loading, requestedTimeMs], () => {
+  if (loading.value || error.value || requestedTimeMs.value === null) return
+  selectedTopicType.value = 'all'
+  if (requestedItem.value) void focusItem(requestedItem.value.id)
+}, { flush: 'post' })
 </script>
 
 
@@ -522,6 +542,11 @@ watch(
       </div>
     </header>
 
+
+    <p v-if="!loading && !error && requestedTimeMs !== null" class="highlights-note" role="status">
+      研究证据位置：整场 {{ formatTimestamp(requestedTimeMs) }}。
+      {{ requestedItem ? '已定位到覆盖该时间的话题片段。' : '该位置暂无覆盖的话题片段，证据时间仍保留供核对。' }}
+    </p>
 
     <div v-if="loading" class="page-loading">
       正在构建整场直播时间线…

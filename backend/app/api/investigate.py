@@ -126,9 +126,10 @@ def research(request: ResearchRequest):
         }) from exc
     except DeepResearchError as exc:
         cause = exc
-        while cause.__cause__ is not None:
+        timeout = False
+        while cause is not None:
+            timeout = timeout or isinstance(cause, (TimeoutError, httpx.TimeoutException))
             cause = cause.__cause__
-        timeout = isinstance(cause, (TimeoutError, httpx.TimeoutException))
         raise HTTPException(status_code=504 if timeout else 502, detail={
             "code": "model_timeout" if timeout else "research_failed",
             "message": "模型请求超时，请稍后重试。" if timeout else f"研究失败：{exc}",

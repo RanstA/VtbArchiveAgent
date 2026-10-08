@@ -126,10 +126,11 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/v/:vtuberId/highlights',
     name: 'highlights',
-    component: () =>
-      import(
-        '@/views/HighlightsView.vue'
-      ),
+    // Retain old bookmarks without loading the unsupported global API.
+    redirect: (to) => ({
+      name: 'archive',
+      params: { vtuberId: to.params.vtuberId },
+    }),
     meta: {
       workspace: true,
     },

@@ -13,7 +13,6 @@ const navItems = computed(() => {
   return [
     { name: 'archive', label: 'Archive', meta: '直播档案', icon: 'AR' },
     { name: 'search', label: 'Search', meta: '历史检索', icon: 'SE' },
-    { name: 'highlights', label: 'Highlights', meta: '高光候选', icon: 'HI' },
     { name: 'investigate', label: 'Investigate', meta: '调查入口', icon: 'IN' },
   ].map((item) => ({ ...item, to: { name: item.name, params: { vtuberId } } }))
 })

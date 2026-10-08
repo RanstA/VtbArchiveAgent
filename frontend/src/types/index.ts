@@ -176,7 +176,6 @@ export interface TopicEvidenceBundle {
  *
  * Legacy SearchEventRow
  * Highlights legacy page
- * Investigate mock
  *
  * 不再用于 Stream Timeline。
  */
@@ -253,15 +252,39 @@ export interface AgentTraceStep {
   status: AgentTraceStatus
 }
 
-export interface InvestigationResult {
+export type ResearchEvidenceKind = 'speech' | 'audience_reaction' | 'archived_interpretation'
+
+export interface ResearchCitation {
+  evidenceRef: string
+  quote: string
+}
+
+export interface ResearchFinding {
+  kind: ResearchEvidenceKind
+  statement: string
+  evidenceRefs: string[]
+  citations: ResearchCitation[]
+}
+
+export interface ResearchLocation {
+  evidenceRef: string
+  streamId: string
+  sourcePartIds: string[]
+  /** Topics may span Parts; never invent a single Part-local range. */
+  partId: string | null
+  localStartMs: number | null
+  localEndMs: number | null
+  streamStartMs: number
+  streamEndMs: number | null
+}
+
+export interface ResearchReport {
   query: string
-
-  trace: AgentTraceStep[]
-
-  candidates: Array<{
-    event: Event
-    stream: Stream
-    evidence: Evidence[]
-    confidence: number
-  }>
+  vtuberId: string
+  searchTerms: string[]
+  answer: string
+  findings: ResearchFinding[]
+  evidenceRefs: string[]
+  locations: ResearchLocation[]
+  limitations: string[]
 }

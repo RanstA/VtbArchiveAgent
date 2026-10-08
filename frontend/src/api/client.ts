@@ -10,7 +10,22 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`)
+    let message = `API request failed: ${response.status}`
+    try {
+      const body: unknown = await response.json()
+      if (body && typeof body === 'object' && 'detail' in body) {
+        const detail = body.detail
+        if (typeof detail === 'string') message = detail
+        else if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+          message = detail.message
+        } else if (Array.isArray(detail)) {
+          message = '请求参数无效，请检查主播和问题内容。'
+        }
+      }
+    } catch {
+      // A proxy may return HTML/empty errors; preserve the HTTP failure.
+    }
+    throw new Error(message)
   }
 
   return response.json() as Promise<T>
