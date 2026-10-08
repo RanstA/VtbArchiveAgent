@@ -192,3 +192,63 @@ def get_danmaku_by_ids(
     }
 
     return [by_id[danmaku_id] for danmaku_id in danmaku_ids if danmaku_id in by_id]
+
+
+def search_danmaku_for_vtuber(
+    connection: sqlite3.Connection,
+    *,
+    vtuber_id: str,
+    query: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Search raw danmaku across streams in one VTuber workspace."""
+    vtuber_id = vtuber_id.strip()
+    term = query.strip()
+
+    if not vtuber_id:
+        raise ValueError("vtuber_id cannot be empty")
+    if not 1 <= limit <= 50:
+        raise ValueError("limit must be between 1 and 50")
+    if not term:
+        return []
+
+    rows = connection.execute(
+        """
+        SELECT
+            d.id,
+            sp.stream_id,
+            sp.part_id,
+            d.timestamp_ms,
+            d.text,
+            sp.start_offset_ms,
+            s.title,
+            s.live_time
+        FROM danmaku d
+        JOIN stream_parts sp
+            ON sp.id = d.stream_part_id
+        JOIN streams s
+            ON s.id = sp.stream_id
+        WHERE s.vtuber_id = ?
+          AND instr(d.text, ?) > 0
+        ORDER BY
+            s.live_time DESC,
+            sp.start_offset_ms + d.timestamp_ms ASC,
+            d.id ASC
+        LIMIT ?
+        """,
+        (vtuber_id, term, limit),
+    ).fetchall()
+
+    return [
+        {
+            "evidence_id": f"danmaku:{r[0]}",
+            "stream_id": r[1],
+            "part_id": r[2],
+            "timestamp_ms": r[3],
+            "text": r[4],
+            "stream_start_ms": r[5] + r[3],
+            "stream_title": r[6],
+            "live_time": r[7],
+        }
+        for r in rows
+    ]

@@ -166,3 +166,65 @@ def get_transcript_segments_by_ids(
         for transcript_id in transcript_segment_ids
         if transcript_id in by_id
     ]
+
+
+
+def search_transcripts_for_vtuber(
+    connection: sqlite3.Connection,
+    *,
+    vtuber_id: str,
+    query: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Search persisted transcripts, including those outside TopicSegments."""
+    term = query.strip()
+    vtuber_id = vtuber_id.strip()
+
+    if not vtuber_id:
+        raise ValueError("vtuber_id cannot be empty")
+    if not 1 <= limit <= 50:
+        raise ValueError("limit must be between 1 and 50")
+    if not term:
+        return []
+
+    rows = connection.execute(
+        """
+        SELECT
+            ts.id, ts.stream_id, ts.part_id,
+            ts.start_ms, ts.end_ms,
+            ts.text, ts.source,
+            sp.start_offset_ms,
+            s.title, s.live_time
+        FROM transcript_segments ts
+        JOIN streams s
+            ON s.id = ts.stream_id
+        JOIN stream_parts sp
+            ON sp.stream_id = ts.stream_id
+            AND sp.part_id = ts.part_id
+        WHERE s.vtuber_id = ?
+            AND instr(ts.text, ?) > 0
+        ORDER BY
+            s.live_time DESC,
+            sp.start_offset_ms + ts.start_ms ASC,
+            ts.id ASC
+        LIMIT ?
+        """,
+        (vtuber_id, term, limit),
+    ).fetchall()
+
+    return [
+        {
+            "evidence_id": f"transcript:{r[0]}",
+            "stream_id": r[1],
+            "part_id": r[2],
+            "start_ms": r[3],
+            "end_ms": r[4],
+            "text": r[5],
+            "source": r[6],
+            "stream_start_ms": r[7] + r[3],
+            "stream_end_ms": r[7] + r[4],
+            "stream_title": r[8],
+            "live_time": r[9],
+        }
+        for r in rows
+    ]
