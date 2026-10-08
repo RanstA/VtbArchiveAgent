@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     event_scout_timeout_seconds: float = 60.0
 
+    # Opt-in local development only; never a public unauthenticated LLM endpoint.
+    deep_research_dev_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
