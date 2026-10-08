@@ -104,12 +104,77 @@ export interface StreamTimeline {
   items: TimelineItem[]
 }
 
+export interface TopicSearchParams {
+  query: string
+  vtuberId?: string
+  limit?: number
+}
+
+export interface SearchHit {
+  streamId: string
+  topicSegmentId: string | null
+  /** Topic positions use the Stream-global timeline. */
+  startMs: number | null
+  endMs: number | null
+  title: string
+  snippet: string
+  score: number
+  evidenceIds: string[] | null
+}
+
+export interface TopicSegment {
+  id: string
+  streamId: string
+  sourcePartIds: string[]
+  reactionMatchIds: string[]
+  /** Topic positions use the Stream-global timeline. */
+  startMs: number
+  endMs: number
+  title: string
+  summary: string
+  keywords: string[]
+  entities: string[]
+  transcriptSegmentIds: string[]
+  salienceScore: number
+  confidence: number
+  analyzerVersion: string
+  topicType: TopicType
+}
+
+export interface TranscriptSegment {
+  id: string
+  streamId: string
+  partId: string
+  /** Evidence positions stay Part-local. */
+  startMs: number
+  endMs: number
+  rawText: string
+  text: string
+  source: string
+}
+
+export interface Danmaku {
+  id: number
+  streamId: string
+  partId: string
+  /** Evidence positions stay Part-local. */
+  timestampMs: number
+  rawText: string
+  text: string
+}
+
+export interface TopicEvidenceBundle {
+  topic: TopicSegment
+  transcripts: TranscriptSegment[]
+  danmaku: Danmaku[]
+}
+
 /**
  * 下面是旧 Event frontend model。
  *
  * 暂时保留给：
  *
- * Search
+ * Legacy SearchEventRow
  * Highlights legacy page
  * Investigate mock
  *
