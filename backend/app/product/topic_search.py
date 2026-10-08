@@ -9,13 +9,13 @@ def search_topics(
     vtuber_id: str | None = None,
     limit: int = 5,
 ) -> list[SearchHit]:
+    if not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+
     term = query.strip()
 
     if not term:
         return []
-
-    if not 1 <= limit <= 100:
-        raise ValueError("limit must be between 1 and 100")
 
     rows = connection.execute(
         """

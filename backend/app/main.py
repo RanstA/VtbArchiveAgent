@@ -8,6 +8,9 @@ from app.api.investigate import (
 from app.api.streams import (
     router as streams_router,
 )
+from app.api.search import (
+    router as search_router,
+)
 from app.api.vtubers import (
     router as vtubers_router,
 )
@@ -54,6 +57,10 @@ app.include_router(
 
 app.include_router(
     streams_router
+)
+
+app.include_router(
+    search_router
 )
 
 app.include_router(
