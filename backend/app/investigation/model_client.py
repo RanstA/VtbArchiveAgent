@@ -26,6 +26,7 @@ class OpenAICompatibleChatClient:
         *,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        include_finish_reason: bool = False,
     ) -> dict[str, Any]:
         endpoint = self.base_url.rstrip("/") + "/chat/completions"
 
@@ -89,4 +90,8 @@ class OpenAICompatibleChatClient:
         ):
             raise ModelClientError("Model message must be an object")
 
+        # Local response metadata, NOT a provider request option. Legacy
+        # EventScout keeps the exact original return shape by default.
+        if include_finish_reason:
+            return {**message, "_finish_reason": choices[0].get("finish_reason")}
         return message

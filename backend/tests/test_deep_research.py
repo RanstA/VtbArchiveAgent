@@ -52,7 +52,7 @@ def extract_all(payload):
 
 
 def run(db, reply=extract_all, **options):
-    model = FakeModelClient({"terms": ["车祸"]}, reply)
+    model = FakeModelClient({"terms": ["车祸"]}, reply, reply)
     report = DeepResearchAgent(model=model, **options).run(db, query=QUESTION, vtuber_id="v1")
     return report, model
 
@@ -76,7 +76,7 @@ def test_natural_language_planning():
 ])
 def test_planner_rejects_invalid_or_sentence_queries(response):
     with pytest.raises(DeepResearchError, match="planner:"):
-        DeepResearchAgent(model=FakeModelClient(response)).plan_query(QUESTION)
+        DeepResearchAgent(model=FakeModelClient(response, response)).plan_query(QUESTION)
 
 
 def test_fake_end_to_end_speech_only(db):
@@ -193,6 +193,8 @@ def test_model_cannot_bypass_guard_with_unvalidated_text(db, extra):
 def test_model_failures_are_explicit(db, stage, failure, label):
     add_transcript(db, 10_000, 11_000, "车祸", id="seed")
     replies = [failure] if stage == "planner" else [{"terms": ["车祸"]}, failure]
+    if isinstance(failure, str):
+        replies.append(failure)
     with pytest.raises(DeepResearchError, match=f"{stage}: {label}"):
         DeepResearchAgent(model=FakeModelClient(*replies)).run(
             db, query=QUESTION, vtuber_id="v1",

@@ -199,7 +199,10 @@ def test_model_and_citation_failures_return_no_partial_report(
     client, search_db, install_model, reply, code, status,
 ):
     seed_speech(search_db)
-    install_model({"terms": ["车祸"]}, reply)
+    replies = [{"terms": ["车祸"]}, reply]
+    if isinstance(reply, str):
+        replies.append(reply)
+    install_model(*replies)
     response = client.post("/investigate/research", json=PAYLOAD)
     assert response.status_code == status
     assert set(response.json()) == {"detail"}
@@ -237,3 +240,27 @@ def test_missing_database_does_not_create_file(client, install_model, tmp_path, 
 def test_existing_stream_highlights_api_preserved(client):
     response = client.get("/streams/stream-1/highlights")
     assert response.status_code == 200 and len(response.json()) == 6
+
+
+def test_structured_failure_http_and_logs_never_expose_raw_output(
+    client, search_db, install_model, caplog,
+):
+    seed_speech(search_db)
+    secret = "PRIVATE_MODEL_OUTPUT_AND_EVIDENCE"
+    invalid = {"findings": [], "insufficientEvidence": secret, secret: secret}
+    model, _ = install_model({"terms": ["车祸"]}, invalid, invalid)
+    response = client.post("/investigate/research", json=PAYLOAD)
+    assert response.status_code == 502
+    assert "schema_validation" in response.json()["detail"]["message"]
+    assert "attempts=2" in response.json()["detail"]["message"]
+    assert secret not in response.text and secret not in caplog.text
+    assert len(model.calls) == 3
+
+
+def test_api_report_format_recovery_still_runs_citation_guard(client, search_db, install_model):
+    seed_speech(search_db)
+    model, _ = install_model({"terms": ["车祸"]}, '{"broken"', draft(ref="forged"), draft())
+    response = client.post("/investigate/research", json=PAYLOAD)
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "citation_validation_failed"
+    assert len(model.calls) == 3 and len(model.replies) == 1

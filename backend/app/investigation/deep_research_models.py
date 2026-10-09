@@ -14,6 +14,19 @@ class CitationGuardError(DeepResearchError):
     pass
 
 
+class StructuredOutputError(DeepResearchError):
+    """Safe diagnostics only: never retain model content or validation inputs."""
+
+    def __init__(self, stage: str, error_type: str, *, attempt: int, fields: tuple[str, ...] = ()):
+        self.stage = stage
+        self.error_type = error_type
+        self.attempt = attempt
+        self.fields = fields
+        super().__init__(
+            f"{stage}: invalid structured JSON ({error_type}; attempts={attempt})"
+        )
+
+
 class ResearchModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel, populate_by_name=True,

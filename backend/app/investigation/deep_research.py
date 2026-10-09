@@ -1,6 +1,7 @@
 """Bounded, read-only DeepResearch MVP, independent of EventScout."""
 
 import json
+import logging
 import sqlite3
 from typing import TypeVar
 import unicodedata
@@ -12,6 +13,7 @@ from app.investigation.citation_guard import validate_research_report
 from app.investigation.deep_research_models import (
     DeepResearchError, EvidenceLocation, QueryPlan, ResearchDraft,
     ResearchEvidence, ResearchModel, ResearchReport,
+    StructuredOutputError,
 )
 from app.investigation.evidence_bundle import build_investigation_evidence
 from app.investigation.model_client import ModelClientError, OpenAICompatibleChatClient
@@ -26,6 +28,11 @@ _DTO = TypeVar("_DTO", bound=ResearchModel)
 MAX_MODEL_INPUT_CHARS = 40_000
 MAX_MODEL_RESPONSE_CHARS = 32_000
 MAX_EVIDENCE_TEXT_CHARS = 1_000
+logger = logging.getLogger(__name__)
+_RECOVERABLE_FORMAT_ERRORS = {
+    "json_syntax", "schema_validation", "markdown_wrapper", "empty_response",
+    "non_string_response", "output_truncated", "response_too_large",
+}
 
 
 def _normal_key(value: str) -> str:
@@ -44,6 +51,68 @@ def _unique_json_object(pairs):
 
 def _invalid_constant(value):
     raise ValueError(f"invalid JSON constant: {value}")
+
+
+def _safe_validation_fields(exc: ValidationError, schema: type[ResearchModel]) -> tuple[str, ...]:
+    # Extra keys and invalid values may contain evidence or injected secrets.
+    # Log only schema-owned field names and error codes, never msg/input/ctx.
+    known_fields: set[str] = set()
+
+    def collect(node):
+        if isinstance(node, dict):
+            known_fields.update(node.get("properties", {}).keys())
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(schema.model_json_schema())
+    collect(schema.model_json_schema(by_alias=False))
+    fields = []
+    for error in exc.errors(include_url=False, include_context=False, include_input=False)[:8]:
+        path = ".".join(
+            str(part) if isinstance(part, int) or part in known_fields else "<extra>"
+            for part in error["loc"][:12]
+        ) or "$"
+        fields.append(f"{path}:{error['type']}")
+    return tuple(fields)
+
+
+def _parse_output(message, schema: type[_DTO], *, stage: str, attempt: int) -> _DTO:
+    def fail(error_type):
+        raise StructuredOutputError(stage, error_type, attempt=attempt)
+
+    if not isinstance(message, dict):
+        fail("invalid_response")
+    if message.get("_finish_reason") == "length":
+        fail("output_truncated")
+    if message.get("refusal") or message.get("_finish_reason") == "content_filter":
+        fail("model_refusal")
+    if message.get("tool_calls"):
+        fail("unexpected_tool_calls")
+    content = message.get("content")
+    if content is None or isinstance(content, str) and not content.strip():
+        fail("empty_response")
+    if not isinstance(content, str):
+        fail("non_string_response")
+    if len(content) > MAX_MODEL_RESPONSE_CHARS:
+        fail("response_too_large")
+    if content.lstrip().startswith(chr(96) * 3):
+        fail("markdown_wrapper")
+    try:
+        data = json.loads(content, object_pairs_hook=_unique_json_object,
+                          parse_constant=_invalid_constant)
+    except (ValueError, RecursionError):
+        # Missing finish_reason cannot establish truncation: report syntax only.
+        raise StructuredOutputError(stage, "json_syntax", attempt=attempt) from None
+    try:
+        return schema.model_validate(data)
+    except ValidationError as exc:
+        raise StructuredOutputError(
+            stage, "schema_validation", attempt=attempt,
+            fields=_safe_validation_fields(exc, schema),
+        ) from None
 
 
 class DeepResearchAgent:
@@ -68,31 +137,49 @@ class DeepResearchAgent:
         self.max_evidence_chars = max_evidence_chars
 
     def _ask(self, stage: str, system: str, payload: dict, schema: type[_DTO]) -> _DTO:
-        messages = [
+        base_messages = [
             {"role": "system", "content": system + "\nJSON schema:\n" + json.dumps(schema.model_json_schema(), ensure_ascii=False)},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
         ]
-        if sum(len(message["content"]) for message in messages) > MAX_MODEL_INPUT_CHARS:
-            raise DeepResearchError(f"{stage}: model input exceeds character budget")
-        try:
-            message = self.model.complete(messages=messages, tools=None)
-        except (ModelClientError, httpx.HTTPError, TimeoutError) as exc:
-            timeout = isinstance(exc, (httpx.TimeoutException, TimeoutError)) or isinstance(
-                exc.__cause__, (httpx.TimeoutException, TimeoutError),
-            )
-            label = "model timeout" if timeout else "model call failed"
-            raise DeepResearchError(f"{stage}: {label}") from exc
-        try:
-            if not isinstance(message, dict) or message.get("tool_calls"):
-                raise ValueError("expected a final JSON message without tool calls")
-            content = message.get("content")
-            if not isinstance(content, str) or len(content) > MAX_MODEL_RESPONSE_CHARS:
-                raise ValueError("missing or oversized JSON content")
-            payload = json.loads(content, object_pairs_hook=_unique_json_object,
-                                 parse_constant=_invalid_constant)
-            return schema.model_validate(payload)
-        except (ValueError, TypeError, ValidationError) as exc:
-            raise DeepResearchError(f"{stage}: invalid structured JSON") from exc
+        retry_hint = ""
+        for attempt in (1, 2):
+            # Reuse exactly the same evidence/whitelist. Do not replay the failed
+            # raw output or repair citation IDs, quotes, fields or JSON locally.
+            messages = [dict(message) for message in base_messages]
+            messages[0]["content"] += retry_hint
+            if sum(len(message["content"]) for message in messages) > MAX_MODEL_INPUT_CHARS:
+                raise DeepResearchError(f"{stage}: model input exceeds character budget")
+            try:
+                if isinstance(self.model, OpenAICompatibleChatClient):
+                    message = self.model.complete(
+                        messages=messages, tools=None, include_finish_reason=True,
+                    )
+                else:
+                    message = self.model.complete(messages=messages, tools=None)
+            except (ModelClientError, httpx.HTTPError, TimeoutError) as exc:
+                timeout = isinstance(exc, (httpx.TimeoutException, TimeoutError)) or isinstance(
+                    exc.__cause__, (httpx.TimeoutException, TimeoutError),
+                )
+                label = "model timeout" if timeout else "model call failed"
+                # Transport failures are not formatting failures: no retry.
+                raise DeepResearchError(f"{stage}: {label}") from exc
+            try:
+                return _parse_output(message, schema, stage=stage, attempt=attempt)
+            except StructuredOutputError as exc:
+                logger.warning(
+                    "DeepResearch structured output stage=%s attempt=%s error_type=%s fields=%s",
+                    stage, attempt, exc.error_type, ",".join(exc.fields) or "-",
+                )
+                if attempt == 2 or exc.error_type not in _RECOVERABLE_FORMAT_ERRORS:
+                    raise
+                retry_hint = (
+                    "\n格式重试（仅此一次）：上次输出违反约束："
+                    + exc.error_type + "; fields=" + (", ".join(exc.fields) or "-")
+                    + "。重新输出完整、精简且符合上述严格 schema 的单个 JSON 对象，"
+                    "不得带 Markdown 或解释；必填字段不能缺失，不得增加字段或转换字段类型。"
+                    "不要修改 evidenceRef 或 quote 来迎合校验，不得编造证据。"
+                    "重试仍受原输出长度限制，不得续写上次被截断的 JSON。"
+                )
 
     def plan_query(self, query: str) -> QueryPlan:
         plan = self._ask(

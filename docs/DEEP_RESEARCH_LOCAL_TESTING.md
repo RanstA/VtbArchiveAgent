@@ -41,13 +41,19 @@ $vtubers = Invoke-RestMethod http://127.0.0.1:8000/vtubers
 $vtubers | Format-Table id, displayName
 $vtuberId = Read-Host '输入上面已有的主播 id'
 $body = @{ vtuberId = $vtuberId; query = '主播有没有提到车祸？' } | ConvertTo-Json
-$report = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/investigate/research -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 180
+$report = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/investigate/research -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 300
 $report | ConvertTo-Json -Depth 12
 ```
 
 也可打开 http://127.0.0.1:5173，选择主播 → Investigate → 输入完整问题 → 开始调查。预期显示 answer、findings、原文 citations、位置和 limitations。没有证据也应返回完整的空报告，不应编造答案。
 
-每次研究最多两次串行模型请求，默认单次超时 60 秒；若提高后端超时，请相应提高手动请求的 TimeoutSec。浏览器离开页面会丢弃未完成的结果，但不会强制取消服务端已开始的同步模型调用。
+正常研究使用 Planner 和 Report 各一次模型请求。每阶段仅针对可恢复的格式错误额外重试一次，因此最多四次串行请求；默认单次超时 60 秒。网络失败、超时、模型拒绝、规划语义错误及 Citation Guard 失败不自动重试。若提高后端超时，请相应提高手动请求的 TimeoutSec。浏览器离开页面会丢弃未完成的结果，但不会强制取消服务端已开始的同步模型调用。
+
+结构化输出失败时，后端 logger app.investigation.deep_research 记录 stage、attempt、error_type 和脱敏字段路径/校验类型，不记录原始响应、证据内容或凭据。未知额外字段名显示为 &lt;extra&gt;。HTTP 错误只返回阶段、错误类型和尝试次数，不携带模型原文。
+
+output_truncated 仅在服务返回 finish_reason=length 时确认；服务未提供该元数据时，不根据不完整 JSON 猜测截断原因。超过本地字符预算另报 response_too_large。
+
+当前请求仍以 prompt 中的严格 JSON Schema 为约束，未默认发送 response_format 等供应商参数。客户端已有 extra_body 显式扩展能力，但本轮没有改动实际模型配置，也未验证 Kimi 的 JSON mode / JSON Schema 支持；需根据具体服务和模型版本确认后再单独启用。新增的 include_finish_reason 仅控制本地返回元数据，不发送给模型供应商，旧 EventScout 默认行为不变。
 
 ## 验收
 
